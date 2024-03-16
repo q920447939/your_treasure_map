@@ -57,3 +57,12 @@ systemctl start docker  # 启动docker服务
 docker -v
 ```
 
+
+### 7.加入开机自启
+
+```
+systemctl enable docker
+
+#查看开机自启
+systemctl is-enabled docker
+```
