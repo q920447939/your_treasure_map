@@ -3,10 +3,11 @@
 ### 1.创建宿主机挂载目录和docker-compose文件
 
 ```
-mkdir -p /home/redis/datadir
-mkdir -p /home/redis/log
-mkdir -p /home/redis/conf/
-mkdir -p /home/redis/docker-compose
+rm -rf /opt/dockerstore/redis
+mkdir -p /opt/dockerstore/redis/datadir
+mkdir -p /opt/dockerstore/redis/log
+mkdir -p /opt/dockerstore/redis/conf/
+mkdir -p /opt/dockerstore/redis/docker-compose
 ```
 
 
@@ -14,7 +15,7 @@ mkdir -p /home/redis/docker-compose
 ### 2.编辑配置文件
 
 ```
-vi /home/redis/conf/redis.conf
+vi /opt/dockerstore/redis/conf/redis.conf
 #内容如下：
 
 bind 0.0.0.0
@@ -52,13 +53,13 @@ services:
     restart: always
     container_name: docker_redis
     volumes:
-      - /home/redis/datadir:/data
-      - /home/redis/conf/redis.conf:/usr/local/etc/redis/redis.conf
-      - /home/redis/log:/logs
+      - /opt/dockerstore/redis/datadir:/data
+      - /opt/dockerstore/redis/conf/redis.conf:/usr/local/etc/redis/redis.conf
+      - /opt/dockerstore/redis/log:/logs
     ports:
       - '61379:6379'
 	environment:
-      - REDIS_PASSWORD='dfsg_redis'
+      - REDIS_PASSWORD='redis@480@2024~'
       - REDIS_PORT=6379
       - REDIS_DATABASES=16
 ```
