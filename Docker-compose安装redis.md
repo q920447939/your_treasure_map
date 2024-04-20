@@ -58,10 +58,8 @@ services:
       - /opt/dockerstore/redis/log:/logs
     ports:
       - '61379:6379'
-	environment:
-      - REDIS_PASSWORD='redis@480@2024~'
-      - REDIS_PORT=6379
-      - REDIS_DATABASES=16
+    command:
+      --requirepass "你的密码"
 ```
 
 
