@@ -5,7 +5,7 @@
 ### 2.在服务器上创建一个ruskdesk 用户,并创建docker挂载文件夹
 
 ```bash
-useradd ruskdesk 
+useradd rustdesk 
 chmod -R 755 /home/rustdesk/
 mkdir -p /home/rustdesk/data
 ```
@@ -32,7 +32,7 @@ services:
     
     command: hbbs -r 【your ip】:21117
     volumes:
-      - ./data:/root
+      - /home/rustdesk/data:/root
     networks:
       - rustdesk-net
     depends_on:
@@ -46,7 +46,7 @@ services:
     image: rustdesk/rustdesk-server:latest
     command: hbbr
     volumes:
-      - ./data:/root
+      - /home/rustdesk/data:/root
     networks:
       - rustdesk-net
     restart: unless-stopped
@@ -64,7 +64,7 @@ docker-compose up -d
 ### 5.查看docker容器是否启动正常
 
 ```bash
-dokcer ps
+docker ps
 ```
 
 ### 6.把服务器的防火墙打开相应的端口（开放完后，可以使用`telnet ip port 测试是否端口可以连通`）：
