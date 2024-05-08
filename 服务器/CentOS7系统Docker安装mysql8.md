@@ -86,7 +86,7 @@ services:
       # 设置 MySQL root 用户的密码为 root
       MYSQL_ROOT_PASSWORD: "自定义密码"
     ports:
-      - 3306:3306
+      - 63306:3306
     volumes:
       # 挂载数据目录
        - /etc/localtime:/etc/localtime
