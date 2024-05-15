@@ -84,7 +84,8 @@ services:
     oom_score_adj: -1000
     environment:
       # 设置 MySQL root 用户的密码为 root
-      MYSQL_ROOT_PASSWORD: "自定义密码"
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_ROOT_HOST: "%"
     ports:
       - 63306:3306
     volumes:
