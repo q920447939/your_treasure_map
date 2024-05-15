@@ -172,7 +172,7 @@
          vi /tmp/categraf-v0.3.65/categraf-v0.3.65-linux-amd64/conf/config.toml 
           
          [global]
-         hostname = "`server56`" #修改一下主机名称
+         hostname = "server56" #修改一下主机名称
          
          [ibex]
          enable = true  #改为true
@@ -201,7 +201,7 @@
          #下面的内容按需填入
          # username = ""
          # password = ""
-         labels = { instance="server56:63306" }
+         labels = { instance="server56:61379" }
          
          ```
       
@@ -212,7 +212,7 @@
          
           
          [global]
-         hostname = "`vm250`" #修改一下主机名称
+         hostname = "vm250" #修改一下主机名称
          
          
          [[writers]]
@@ -324,7 +324,7 @@ SyslogIdentifier=victoriametrics
 WantedBy=multi-user.target
 ```
 
-### 
+
 
 ### 实现自定义监控
 
