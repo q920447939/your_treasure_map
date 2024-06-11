@@ -1,0 +1,17 @@
+---
+- name: Permanently disable SELinux on CentOS 7
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Ensure SELinux is disabled in the config file
+      lineinfile:
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: 'SELINUX=disabled'
+        state: present
+
+    - name: Set SELinux to permissive mode until reboot
+      command: setenforce 0
+      when: ansible_selinux.status != "disabled"
+

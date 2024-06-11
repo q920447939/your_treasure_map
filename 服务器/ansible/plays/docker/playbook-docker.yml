@@ -1,0 +1,72 @@
+- name: Setup and install Docker on managed nodes
+  hosts: all
+  become: yes
+  vars:
+    - remote_path: /opt/ansible
+  tasks:
+    - name: Ensure target directories exist
+      file:
+        path: "{{ remote_path }}/{{ item }}"
+        state: directory
+        mode: '0755'
+      with_items:
+        - dockerstore/dockerfile
+        - script
+        - deploy
+
+    - name: Copy script directory to "{{ remote_path }}"/dockerstore/dockerfile on managed nodes
+      copy:
+        src: /tmp/ansible/script/
+        dest: "{{ remote_path }}/dockerstore/dockerfile/"
+        mode: '0755'
+        owner: root
+        group: root
+        backup: yes
+        #checksum: yes
+      tags:
+        - copy
+        - copy_scripts
+
+    - name: Copy script directory to "{{ remote_path }}"/script on managed nodes
+      copy:
+        src: /tmp/ansible/script/
+        dest: "{{ remote_path }}/script/"
+        mode: '0755'
+        owner: root
+        group: root
+        backup: yes
+        #checksum: yes
+      tags:
+        - copy
+        - copy_script
+
+    - name: Copy deploy directory to "{{ remote_path }}"/deploy on managed nodes
+      copy:
+        src: /tmp/ansible/deploy/
+        dest: "{{ remote_path }}/deploy/"
+        mode: '0755'
+        owner: root
+        group: root
+        backup: yes
+        #checksum: yes
+      tags:
+        - copy
+        - copy_deploy
+        
+    - name: Run install_docker.sh script
+      command: /bin/bash "{{ remote_path }}"/script/install_docker.sh
+      args:
+        chdir: "{{ remote_path }}/script/"
+      async: 600
+      poll: 10
+      tags:
+        - bash
+        - bash_docker
+        
+    - name: Run install_docker_compose.sh script
+      command: /bin/bash "{{ remote_path }}"/script/install_docker_compose.sh
+      args:
+        chdir: "{{ remote_path }}/script/"
+      tags:
+        - bash
+        - bash_docker_compose

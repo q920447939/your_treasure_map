@@ -1,0 +1,28 @@
+---
+- name: Set system timezone to Asia/Shanghai
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Ensure tzdata is installed
+      yum:
+        name: tzdata
+        state: present
+
+    - name: Set timezone to Asia/Shanghai
+      command: timedatectl set-timezone Asia/Shanghai
+
+    - name: Create symlink for localtime
+      file:
+        src: /usr/share/zoneinfo/Asia/Shanghai
+        dest: /etc/localtime
+        state: link
+        force: yes
+
+    - name: Ensure timezone is set correctly
+      shell: timedatectl
+      register: timezone_result
+
+    - name: Debug timezone setting
+      debug:
+        var: timezone_result.stdout

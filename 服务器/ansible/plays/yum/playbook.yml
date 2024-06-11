@@ -1,0 +1,19 @@
+- name: 
+  hosts: all
+  become: yes
+  tasks:
+    - name: Yum Install
+      yum:
+        name:
+          - epel-release
+          - telnet
+          - wget
+          - lrzsz
+          - vim
+          - vim-enhanced
+          - tree
+          - unzip
+          - net-tools
+          - git
+          - tar
+        state: present

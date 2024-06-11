@@ -1,0 +1,66 @@
+---
+- name: Install JDK 21 on CentOS 7
+  hosts: all
+  become: yes
+
+  vars:
+    jdk_install_dir: "/opt/ansible/jdk-21"
+    source_path: "./"
+    jdk_name: "jdk-21_linux-x64_bin.tar.gz"
+    java_version: "21.0.3"
+
+  tasks:
+    - name: Create installation directory
+      file:
+        path: "{{ jdk_install_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy JDK To Remote
+      copy:
+        src: "{{source_path}}/{{jdk_name}}"
+        dest: /tmp
+        mode: '0755'
+        owner: root
+        group: root
+      tags:
+        - copy
+
+    - name: Extract JDK
+      unarchive:
+        src: "/tmp/{{jdk_name}}"
+        dest: "{{ jdk_install_dir }}"
+        remote_src: yes
+
+    - name: Set JDK alternatives for java
+      alternatives:
+        name: java
+        link: /usr/bin/java
+        path: "{{ jdk_install_dir }}/jdk-{{ java_version }}/bin/java"
+        priority: 1
+
+    - name: Set JDK alternatives for javac
+      alternatives:
+        name: javac
+        link: /usr/bin/javac
+        path: "{{ jdk_install_dir }}/jdk-{{ java_version }}/bin/javac"
+        priority: 1
+
+    - name: Set JAVA_HOME environment variable
+      lineinfile:
+        path: /etc/profile
+        state: present
+        line: 'export JAVA_HOME={{ jdk_install_dir }}/jdk-{{ java_version }}'
+        insertafter: EOF
+
+    - name: Set PATH environment variable for JAVA_HOME
+      lineinfile:
+        path: /etc/profile
+        state: present
+        line: 'export PATH=$JAVA_HOME/bin:$PATH'
+        insertafter: EOF
+
+    - name: Source profile to update environment variables
+      shell: source /etc/profile
+      args:
+        executable: /bin/bash
