@@ -1,7 +1,7 @@
 import os
 
 # 指定要读取的文件夹路径
-folder_path = "./"
+folder_path = "F:/liming/md/your_treasure_map"
 
 def generate_markdown_toc(folder_path):
 
@@ -23,6 +23,7 @@ def generate_markdown_toc(folder_path):
                 has_md_files = True
                 indent = "  " * level
                 relative_path = os.path.relpath(item_path, folder_path)
+                relative_path = "./" + relative_path.replace("\\", "/")
                 file_name = os.path.splitext(item)[0]
                 toc.append(f"{indent}- [{file_name}]({relative_path})")
 
