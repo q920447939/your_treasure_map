@@ -1,0 +1,8 @@
+---
+- name: Main playbook
+  hosts: all
+  become: yes
+- import_playbook: ./plays/disable_selinux/disable_selinux.yml
+- import_playbook: ./plays/dns/dns_setup.yml
+- import_playbook: ./plays/yum/playbook.yml
+- import_playbook: ./plays/set_timezone/set_timezone.yml

@@ -1,0 +1,56 @@
+---
+- name: Offline Install Nginx 1.2.x on CentOS 7
+  hosts: all
+  become: yes
+  vars:
+    - source_path: /tmp/ansible/deploy/nginx/
+    - remote_path: /opt/ansible/deploy/nginx/
+    - nginx_name: nginx-1.26.1-1.el7.ngx.x86_64.rpm
+    - nginx_conf: /etc/nginx/nginx.conf
+  tasks:
+    - name: Copy Nginx RPM to remote server
+      copy:
+        src: "{{ source_path }}"
+        dest: "{{ remote_path }}"
+        mode: '0644'
+      tags:
+        - copy
+
+    - name: Install Nginx from RPM
+      yum:
+        name: "{{ remote_path }}{{nginx_name}}"
+        state: present
+
+    - name: Start and enable Nginx service
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Enable Nginx service to start on boot
+      systemd:
+        name: nginx
+        enabled: yes
+        state: started
+
+    - name: Copy custom Nginx configuration file
+      copy:
+        src: "{{ source_path }}/nginx.conf"
+        dest: "{{ nginx_conf }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Reload Nginx configuration
+      command: nginx -s reload
+      args:
+        warn: false
+        
+    - name: Ensure Nginx is running
+      shell: |
+        systemctl is-active nginx
+      register: nginx_status
+      failed_when: nginx_status.stdout != "active"
+      changed_when: false
+      
+#- import_playbook: ./plays/nginx/playbook-nginx-conf.yml

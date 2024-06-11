@@ -1,0 +1,19 @@
+---
+- name: Configure DNS on CentOS 7
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Ensure DNS nameserver 114.114.114.114 is configured
+      lineinfile:
+        path: /etc/resolv.conf
+        state: present
+        line: 'nameserver 114.114.114.114'
+        insertafter: EOF
+
+    - name: Ensure DNS nameserver 119.29.29.29 is configured
+      lineinfile:
+        path: /etc/resolv.conf
+        state: present
+        line: 'nameserver 119.29.29.29'
+        insertafter: EOF

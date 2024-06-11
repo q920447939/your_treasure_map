@@ -1,0 +1,32 @@
+- name: Setup and install Docker on managed nodes
+  hosts: all
+  become: yes
+  vars:
+    - proxy_url: http://192.168.230.1:7892
+  tasks:
+    - name: Ensure Docker service directory exists
+      file:
+        path: /etc/systemd/system/docker.service.d
+        state: directory
+        mode: '0755'
+
+    - name: Create or modify Docker HTTP proxy configuration
+      copy:
+        dest: /etc/systemd/system/docker.service.d/proxy.conf
+        content: |
+          [Service]
+          Environment="HTTP_PROXY={{proxy_url}}"
+          Environment="HTTPS_PROXY={{proxy_url}}"
+          Environment="NO_PROXY=localhost,127.0.0.1"
+        mode: '0644'
+      notify: Restart Docker
+
+    - name: Reload systemd manager configuration
+      command: systemctl daemon-reload
+      notify: Restart Docker
+
+  handlers:
+    - name: Restart Docker
+      service:
+        name: docker
+        state: restarted

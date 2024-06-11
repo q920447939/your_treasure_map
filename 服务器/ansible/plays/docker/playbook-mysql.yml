@@ -1,0 +1,42 @@
+- name: Setup and install Docker on managed nodes
+  hosts: all
+  become: yes
+  vars:
+    - source_path: /tmp/ansible
+    - remote_path: /opt/ansible
+  tasks:
+
+    - name: Copy mysql
+      copy:
+        src: "{{source_path}}/dockerstore/dockerfile/mysql/"
+        dest: "{{ remote_path }}/dockerstore/dockerfile/mysql/"
+        mode: '0755'
+        owner: root
+        group: root
+        backup: yes
+        #checksum: yes
+      tags:
+        - copy
+
+
+    - name: Stop Docker MySQL container if exists
+      shell: docker stop docker_mysql
+      ignore_errors: yes
+
+    - name: Remove Docker MySQL container if exists
+      shell: docker rm docker_mysql
+      ignore_errors: yes
+
+
+    - name: Remove Docker MySQL image if exists
+      shell: docker rmi mysql:8.0.28
+      ignore_errors: yes
+         
+    - name: Run  script
+      command: /bin/bash "{{ remote_path }}"/dockerstore/dockerfile/mysql/install_mysql.sh
+      args:
+        chdir: "{{ remote_path }}/dockerstore/dockerfile/mysql/"
+      async: 600
+      poll: 10
+      tags:
+        - bash

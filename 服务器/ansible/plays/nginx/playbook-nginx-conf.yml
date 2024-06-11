@@ -1,0 +1,77 @@
+---
+- name: Setup NGINX
+  hosts: all
+  become: yes
+
+  vars:
+    nginx_backup_dir: "/etc/nginx"
+    local_cert_dir: "/tmp/ansible/plays/nginx/"
+    remote_cert_dir: "/etc/nginx/ssl"
+    remote_nginx_dir: "/etc/nginx/"
+    remote_public_dir: "/var/www/localhost/public"
+    remote_nginx_pid_file: "/run/nginx.pid"
+    local_nginx_files: ["nginxconfig.io", "sites-available", "sites-enabled", "nginx.conf"]
+    firewall_ports: [80, 443]
+
+  tasks:
+    - name: Backup existing NGINX configuration
+      command: tar -czvf nginx_{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}-{{ ansible_date_time.minute }}-{{ ansible_date_time.second }}.tar.gz nginx.conf
+      args:
+        chdir: "{{ nginx_backup_dir }}"
+
+    - name: Create SSL directory if not exists
+      file:
+        path: "{{ remote_cert_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Copy SSL certificates to remote host
+      copy:
+        src: "{{ local_cert_dir }}/localhost.{{ item }}"
+        dest: "{{ remote_cert_dir }}/localhost.{{ item }}"
+      loop:
+        - "crt"
+        - "key"
+
+    - name: Open firewall ports and reload firewall
+      firewalld:
+        port: "{{ item }}/tcp"
+        state: enabled
+        immediate: yes
+        permanent: yes
+      loop: "{{ firewall_ports }}"
+
+    - name: Create public directory
+      file:
+        path: "{{ remote_public_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create nginx pid file
+      file:
+        path: "{{ remote_nginx_pid_file }}"
+        state: touch
+        mode: '0644'
+
+    - name: Copy nginx configuration files
+      copy:
+        src: "{{ item }}"
+        dest: "{{ remote_nginx_dir }}"
+        mode: '0644'
+      with_items: "{{ local_nginx_files }}"
+
+    - name: Validate NGINX configuration
+      command: nginx -t
+      register: nginx_test
+      ignore_errors: yes
+
+    - name: Fail if NGINX configuration is invalid
+      fail:
+        msg: "NGINX configuration test failed"
+      when: nginx_test.rc != 0
+
+    - name: Restart NGINX if configuration is valid
+      service:
+        name: nginx
+        state: restarted
+      when: nginx_test.rc == 0
