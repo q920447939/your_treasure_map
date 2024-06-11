@@ -40,7 +40,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [CentOS7系设置系统代理](服务器\CentOS7系设置系统代理.md)
   - ansible
     - md
-      - [CentOS7-ansible自动化安装服务器初始化脚本](服务器\ansible\md\CentOS7-ansible自动化安装服务器初始化脚本.md)
+      - [CentOS7-ansible自动化安装服务器初始化脚本](./服务器/ansible/md/CentOS7-ansible自动化安装服务器初始化脚本.md)
   - java
     - [CentOS7安装JDK21](服务器\java\CentOS7安装JDK21.md)
   - 监控
