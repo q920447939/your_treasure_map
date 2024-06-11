@@ -34,7 +34,7 @@
 
 ### 实现原理
 
-![image-20240611103541738](F:\liming\md\your_treasure_map\服务器\ansible\md\img\原理图)
+![image-20240611103541738](./img/image-20240611103541738.png)
 
 控制端服务器通过SSH 将控制端上的命令发送到被控端服务器执行 
 
