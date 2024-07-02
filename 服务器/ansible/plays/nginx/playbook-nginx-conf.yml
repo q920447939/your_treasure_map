@@ -33,6 +33,12 @@
         - "crt"
         - "key"
 
+    - name: Copy SSL pem certificates to remote host
+      copy:
+        src: "{{ local_cert_dir }}/dhparam.pem"
+        dest: "{{ remote_nginx_dir }}/dhparam.pem"
+        
+        
     - name: Open firewall ports and reload firewall
       firewalld:
         port: "{{ item }}/tcp"
@@ -40,7 +46,8 @@
         immediate: yes
         permanent: yes
       loop: "{{ firewall_ports }}"
-
+      ignore_errors: yes
+      
     - name: Create public directory
       file:
         path: "{{ remote_public_dir }}"
