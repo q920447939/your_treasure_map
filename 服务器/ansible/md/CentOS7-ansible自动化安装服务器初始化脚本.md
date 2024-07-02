@@ -123,12 +123,15 @@ mkdir -p   /tmp/ansible
 3. 安装docker、docker 安装mysql、redis（按需）
 
    ```bash
+   #安装docker
+   cd /tmp/ansible &&  ansible-playbook -i hosts    plays/docker/playbook-docker.yml   
+   
    #如果需要设置docker代理，那么先编辑 playbook-docker-proxy.yml文件,将里面的 proxy_url 修改成你的代理IP
    vi  /tmp/ansible/plays/docker/playbook-docker-proxy.yml
    
    
    #需要代理版本
-   cd /tmp/ansible &&  ansible-playbook -i hosts plays/docker/playbook-docker-proxy.yml      plays/docker/playbook-mysql.yml plays/docker/playbook-redis.yml
+   cd /tmp/ansible &&  ansible-playbook -i hosts plays/docker/playbook-docker-proxy.yml    plays/docker/playbook-mysql.yml plays/docker/playbook-redis.yml
    	
    #不需要代理版本
    
