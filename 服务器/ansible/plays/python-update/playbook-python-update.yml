@@ -1,0 +1,29 @@
+- name: Update Python Version To Python3
+  hosts: all
+  become: yes
+  vars:
+    - source_path: /tmp/ansible
+    - remote_path: /opt/ansible
+  tasks:
+
+    - name: Copy 
+      copy:
+        src: "{{source_path}}/plays/python-update/"
+        dest: "{{ remote_path }}/plays/python-update/"
+        mode: '0755'
+        owner: root
+        group: root
+        backup: yes
+        #checksum: yes
+      tags:
+        - copy
+
+         
+    - name: Run  script
+      command: /bin/bash python-update.sh
+      args:
+        chdir: "{{ remote_path }}/plays/python-update/"
+      async: 600
+      poll: 10
+      tags:
+        - bash

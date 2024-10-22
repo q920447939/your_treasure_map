@@ -2,6 +2,18 @@
   hosts: all
   become: yes
   tasks:
+
+    - name: Copy 
+      copy:
+        src: "{{source_path}}/plays/yum/Centos-7.repo"
+        dest: "/etc/yum.repos.d/CentOS-Base.repo"
+        mode: '0755'
+        owner: root
+        group: root
+        backup: yes
+        #checksum: yes
+      tags:
+        - copy  
     - name: Yum Install
       yum:
         name:
