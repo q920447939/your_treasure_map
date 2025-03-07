@@ -1,7 +1,7 @@
 import os
 
 # 指定要读取的文件夹路径
-folder_path = "F:/liming/md/your_treasure_map"
+folder_path = "."
 
 def generate_markdown_toc(folder_path):
 
