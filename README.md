@@ -5,20 +5,18 @@ This is a collection of all kinds of software engineering records, you will alwa
 
 
 
-- [CentOS7 一键安装mysql8.0](./CentOS7 一键安装mysql8.0.md)
-- [Docker-compose安装mongodb](./Docker-compose安装mongodb.md)
-- [Docker-compose安装redis](./Docker-compose安装redis.md)
 - IDE
   - Android Studio
     - [修改模拟器磁盘位置](./IDE/Android Studio/修改模拟器磁盘位置.md)
   - IDEA
     - [IDEA2024使用docker教程](./IDE/IDEA/IDEA2024使用docker教程.md)
-- [WIN10允许多用户同时远程登录](./WIN10允许多用户同时远程登录.md)
 - cusor
   - [cusor使用指南](./cusor/cusor使用指南.md)
 - docker
+  - [Docker-compose安装mongodb](./docker/Docker-compose安装mongodb.md)
+  - [Docker-compose安装redis](./docker/Docker-compose安装redis.md)
   - [docekr操作记录](./docker/docekr操作记录.md)
-  - [docker有用的命令](./docker/docker有用的命令.md)
+  - [docker查看容器挂载](./docker/docker查看容器挂载.md)
 - flutter
   - [AndroidStudio模拟器编辑hosts访问宿主机](./flutter/AndroidStudio模拟器编辑hosts访问宿主机.md)
   - [Android和Flutter混合开发提示【Failed to apply plugin class 'FlutterPlugin】](./flutter/Android和Flutter混合开发提示【Failed to apply plugin class 'FlutterPlugin】.md)
@@ -28,6 +26,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [Flutter：web项目跨域问题解决](./flutter/Flutter：web项目跨域问题解决.md)
   - [Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 1.9.0, expected version is 1.7.1](./flutter/Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 1.9.0, expected version is 1.7.1.md)
 - git
+  - [Git-pre-commit-hook说明](./git/Git-pre-commit-hook说明.md)
   - [git【报错】this exceeds GitHub‘s file size limit of 100.00 MB](./git/git【报错】this exceeds GitHub‘s file size limit of 100.00 MB.md)
   - [git已提交到暂存区的文件如何移除](./git/git已提交到暂存区的文件如何移除.md)
 - gitKraken
@@ -40,39 +39,40 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [OD学习](./od/OD学习.md)
 - python
   - [pycharm uvicorn作为ASGI服务器的PythonWeb应用使用DEBUG和热更新配置](./python/pycharm uvicorn作为ASGI服务器的PythonWeb应用使用DEBUG和热更新配置.md)
-- rabbitMQ
-  - [rabbitMQ](./rabbitMQ/rabbitMQ.md)
-- rocketMQ
-  - [rocketMQ双nameserver双broker-Doker部署教程](./rocketMQ/rocketMQ双nameserver双broker-Doker部署教程.md)
+- softwareDevelop
+  - middleware
+    - MQ
+      - rabbitMQ
+        - [RabbitMQ生产者消费者demo](./softwareDevelop/middleware/MQ/rabbitMQ/RabbitMQ生产者消费者demo.md)
+      - rocketMQ
+        - [rocketMQ双nameserver双broker-Doker部署教程](./softwareDevelop/middleware/MQ/rocketMQ/rocketMQ双nameserver双broker-Doker部署教程.md)
 - spring-boot
   - [SpringBoot全局traceId](./spring-boot/SpringBoot全局traceId.md)
   - [SpringBoot适配异步Log4j](./spring-boot/SpringBoot适配异步Log4j.md)
+  - [初探SpringBoot源码,maven打包后如何启动的springBoot项目(1)](./spring-boot/初探SpringBoot源码,maven打包后如何启动的springBoot项目(1).md)
   - 记录
     - [SpringBoot web记一次标记了@RestController和@RequestMapping,但是提示 No static resource ](./spring-boot/记录/SpringBoot web记一次标记了@RestController和@RequestMapping,但是提示 No static resource .md)
     - [SpringBoot记一次basepackageScan失效问题](./spring-boot/记录/SpringBoot记一次basepackageScan失效问题.md)
-- test
-  - [test](./test/test.md)
-  - [test1](./test/test1.md)
 - windows
+  - [WIN10允许多用户同时远程登录](./windows/WIN10允许多用户同时远程登录.md)
   - [解决浏览器出现“由贵单位管理”“由所属组织管理”](./windows/解决浏览器出现“由贵单位管理”“由所属组织管理”.md)
-- [初探SpringBoot源码,maven打包后如何启动的springBoot项目(1)](./初探SpringBoot源码,maven打包后如何启动的springBoot项目(1).md)
-- 国产系统
-  - [麒麟系统安装Docker](./国产系统/麒麟系统安装Docker.md)
 - 服务器
-  - [CentOS7一键修改ssh端口脚本](./服务器/CentOS7一键修改ssh端口脚本.md)
-  - [CentOS7使用Clash](./服务器/CentOS7使用Clash.md)
-  - [CentOS7使用fail2ban](./服务器/CentOS7使用fail2ban.md)
-  - [CentOS7安装Docker-compose](./服务器/CentOS7安装Docker-compose.md)
-  - [CentOS7安装Docker](./服务器/CentOS7安装Docker.md)
-  - [CentOS7安装Rust-desk](./服务器/CentOS7安装Rust-desk.md)
-  - [CentOS7服务器设置swap交换区](./服务器/CentOS7服务器设置swap交换区.md)
-  - [CentOS7系统Docker安装mysql8](./服务器/CentOS7系统Docker安装mysql8.md)
-  - [CentOS7系统Docker安装nginx](./服务器/CentOS7系统Docker安装nginx.md)
-  - CentOS7系统服务器管理脚本
-    - [CentOS7系统服务器管理脚本(swap设置)](./服务器/CentOS7系统服务器管理脚本/CentOS7系统服务器管理脚本(swap设置).md)
-  - [CentOS7系设置系统代理](./服务器/CentOS7系设置系统代理.md)
-  - Cento7使用rinetd端口转发
-    - [Cento7使用rinetd端口转发](./服务器/Cento7使用rinetd端口转发/Cento7使用rinetd端口转发.md)
+  - CentOS7
+    - [CentOS7 一键安装mysql8.0](./服务器/CentOS7/CentOS7 一键安装mysql8.0.md)
+    - [CentOS7一键修改ssh端口脚本](./服务器/CentOS7/CentOS7一键修改ssh端口脚本.md)
+    - [CentOS7使用Clash](./服务器/CentOS7/CentOS7使用Clash.md)
+    - [CentOS7使用fail2ban](./服务器/CentOS7/CentOS7使用fail2ban.md)
+    - [CentOS7安装Docker-compose](./服务器/CentOS7/CentOS7安装Docker-compose.md)
+    - [CentOS7安装Docker](./服务器/CentOS7/CentOS7安装Docker.md)
+    - [CentOS7安装Rust-desk](./服务器/CentOS7/CentOS7安装Rust-desk.md)
+    - [CentOS7服务器设置swap交换区](./服务器/CentOS7/CentOS7服务器设置swap交换区.md)
+    - [CentOS7系统Docker安装mysql8](./服务器/CentOS7/CentOS7系统Docker安装mysql8.md)
+    - [CentOS7系统Docker安装nginx](./服务器/CentOS7/CentOS7系统Docker安装nginx.md)
+    - CentOS7系统服务器管理脚本
+      - [CentOS7系统服务器管理脚本(swap设置)](./服务器/CentOS7/CentOS7系统服务器管理脚本/CentOS7系统服务器管理脚本(swap设置).md)
+    - [CentOS7系设置系统代理](./服务器/CentOS7/CentOS7系设置系统代理.md)
+    - Cento7使用rinetd端口转发
+      - [Cento7使用rinetd端口转发](./服务器/CentOS7/Cento7使用rinetd端口转发/Cento7使用rinetd端口转发.md)
   - [Linux创建开启自启服务](./服务器/Linux创建开启自启服务.md)
   - [Linux新增普通用户](./服务器/Linux新增普通用户.md)
   - Ubuntu
@@ -84,6 +84,8 @@ This is a collection of all kinds of software engineering records, you will alwa
       - [CentOS7-ansible自动化安装服务器初始化脚本](./服务器/ansible/md/CentOS7-ansible自动化安装服务器初始化脚本.md)
   - java
     - [CentOS7安装JDK21](./服务器/java/CentOS7安装JDK21.md)
+  - 国产系统
+    - [麒麟系统安装Docker](./服务器/国产系统/麒麟系统安装Docker.md)
   - 监控
     - [CentOS7 grafana监控mysql信息(多节点)](./服务器/监控/CentOS7 grafana监控mysql信息(多节点).md)
     - [CentOS7 grafana监控主机信息(多节点)](./服务器/监控/CentOS7 grafana监控主机信息(多节点).md)
@@ -92,5 +94,6 @@ This is a collection of all kinds of software engineering records, you will alwa
       - [nightingale(夜莺)安装使用教程](./服务器/监控/nightingale(夜莺)/nightingale(夜莺)安装使用教程.md)
 - 油猴脚本
   - [油猴脚本使用教程](./油猴脚本/油猴脚本使用教程.md)
+- [自动生成目录树功能说明](./自动生成目录树功能说明.md)
 - 设计模式之禅
   - [笔记](./设计模式之禅/笔记.md)
