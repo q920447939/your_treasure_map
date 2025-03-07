@@ -50,6 +50,8 @@ This is a collection of all kinds of software engineering records, you will alwa
   - 记录
     - [SpringBoot web记一次标记了@RestController和@RequestMapping,但是提示 No static resource ](./spring-boot/记录/SpringBoot web记一次标记了@RestController和@RequestMapping,但是提示 No static resource .md)
     - [SpringBoot记一次basepackageScan失效问题](./spring-boot/记录/SpringBoot记一次basepackageScan失效问题.md)
+- test
+  - [test](./test/test.md)
 - windows
   - [解决浏览器出现“由贵单位管理”“由所属组织管理”](./windows/解决浏览器出现“由贵单位管理”“由所属组织管理”.md)
 - [初探SpringBoot源码,maven打包后如何启动的springBoot项目(1)](./初探SpringBoot源码,maven打包后如何启动的springBoot项目(1).md)
