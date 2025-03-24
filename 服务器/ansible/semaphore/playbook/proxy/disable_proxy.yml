@@ -1,0 +1,439 @@
+---
+# Ubuntu 系统代理关闭 Playbook
+# 该 playbook 用于关闭在 Ubuntu 系统中的各种应用程序代理设置
+# 包括系统代理、apt、pip、wget、docker 等
+# 将通过还原备份文件的方式关闭代理配置
+
+- name: 关闭 Ubuntu 系统代理
+  hosts: all
+  become: yes
+  vars:
+    # 控制是否禁用各代理配置的变量（默认全部为 true）
+    disable_system_proxy: true
+    disable_apt_proxy: true
+    disable_pip_proxy: true
+    disable_wget_proxy: true
+    disable_docker_proxy: true
+    disable_curl_proxy: true
+  
+  tasks:
+    # ============= 系统代理关闭 =============
+    - name: 检查是否关闭系统代理
+      debug:
+        msg: "开始关闭系统代理..."
+      when: disable_system_proxy | bool
+    
+    - name: 检查系统环境变量配置备份文件是否存在
+      stat:
+        path: /etc/environment.playbook.bak
+      register: env_bak_file_state
+      when: disable_system_proxy | bool
+    
+    - name: 检查系统环境变量配置文件是否存在
+      stat:
+        path: /etc/environment
+      register: env_file_state
+      when: disable_system_proxy | bool
+    
+    - name: 移除系统环境变量中的代理设置
+      lineinfile:
+        path: /etc/environment
+        regexp: '^(http_proxy|https_proxy|ftp_proxy|HTTP_PROXY|HTTPS_PROXY|FTP_PROXY|no_proxy|NO_PROXY)='
+        state: absent
+      when: disable_system_proxy | bool and env_file_state.stat.exists
+      register: env_proxy_clean
+    
+    - name: 恢复系统环境变量备份文件（如果存在）
+      copy:
+        src: /etc/environment.playbook.bak
+        dest: /etc/environment
+        remote_src: yes
+      when: disable_system_proxy | bool and env_bak_file_state.stat.exists and env_proxy_clean.changed
+      register: system_proxy_restore
+    
+    - name: 删除系统环境变量备份文件
+      file:
+        path: /etc/environment.playbook.bak
+        state: absent
+      when: disable_system_proxy | bool and env_bak_file_state.stat.exists and system_proxy_restore.changed
+      register: system_proxy_bak_removed
+    
+    - name: 系统代理关闭完成
+      debug:
+        msg: "系统代理关闭成功！已恢复原始配置文件 /etc/environment"
+      when: disable_system_proxy | bool and system_proxy_restore.changed
+    
+    - name: 系统代理清理完成
+      debug:
+        msg: "系统代理关闭成功！已从 /etc/environment 中移除代理设置"
+      when: disable_system_proxy | bool and env_proxy_clean.changed and not system_proxy_restore.changed
+    
+    - name: 系统代理备份不存在提示
+      debug:
+        msg: "没有找到系统代理配置备份文件 /etc/environment.playbook.bak，但已清理当前配置中的代理设置"
+      when: disable_system_proxy | bool and not env_bak_file_state.stat.exists and env_proxy_clean.changed
+    
+    # ============= APT 代理关闭 =============
+    - name: 检查是否关闭 APT 代理
+      debug:
+        msg: "开始关闭 APT 代理..."
+      when: disable_apt_proxy | bool
+    
+    - name: 检查 APT 代理备份文件是否存在
+      stat:
+        path: /etc/apt/apt.conf.d/proxy.conf.playbook.bak
+      register: apt_bak_file_state
+      when: disable_apt_proxy | bool
+    
+    - name: 检查 APT 代理配置文件是否存在
+      stat:
+        path: /etc/apt/apt.conf.d/proxy.conf
+      register: apt_file_state
+      when: disable_apt_proxy | bool
+    
+    - name: 移除 APT 代理配置文件
+      file:
+        path: /etc/apt/apt.conf.d/proxy.conf
+        state: absent
+      when: disable_apt_proxy | bool and apt_file_state.stat.exists and apt_bak_file_state.stat.exists
+      register: apt_proxy_remove
+    
+    - name: 从备份恢复 APT 代理配置文件
+      copy:
+        src: /etc/apt/apt.conf.d/proxy.conf.playbook.bak
+        dest: /etc/apt/apt.conf.d/proxy.conf
+        remote_src: yes
+      when: disable_apt_proxy | bool and apt_bak_file_state.stat.exists and apt_proxy_remove.changed
+      register: apt_proxy_restore
+    
+    - name: APT 代理关闭完成
+      debug:
+        msg: "APT 代理关闭成功！已恢复原始配置文件 /etc/apt/apt.conf.d/proxy.conf"
+      when: disable_apt_proxy | bool and apt_proxy_restore.changed
+    
+    - name: APT 代理备份不存在提示
+      debug:
+        msg: "没有找到 APT 代理配置备份文件 /etc/apt/apt.conf.d/proxy.conf.playbook.bak，无法恢复原始配置"
+      when: disable_apt_proxy | bool and not apt_bak_file_state.stat.exists
+    
+    # ============= PIP 代理关闭 =============
+    - name: 检查是否关闭 PIP 代理
+      debug:
+        msg: "开始关闭 PIP 代理..."
+      when: disable_pip_proxy | bool
+    
+    - name: 检查 PIP 代理备份文件是否存在
+      stat:
+        path: ~/.pip/pip.conf.playbook.bak
+      register: pip_bak_file_state
+      become: no
+      when: disable_pip_proxy | bool
+    
+    - name: 检查 PIP 代理配置文件是否存在
+      stat:
+        path: ~/.pip/pip.conf
+      register: pip_file_state
+      become: no
+      when: disable_pip_proxy | bool
+    
+    - name: 移除 PIP 代理配置文件
+      file:
+        path: ~/.pip/pip.conf
+        state: absent
+      become: no
+      when: disable_pip_proxy | bool and pip_file_state.stat.exists and pip_bak_file_state.stat.exists
+      register: pip_proxy_remove
+    
+    - name: 从备份恢复 PIP 代理配置文件
+      copy:
+        src: ~/.pip/pip.conf.playbook.bak
+        dest: ~/.pip/pip.conf
+        remote_src: yes
+      become: no
+      when: disable_pip_proxy | bool and pip_bak_file_state.stat.exists and pip_proxy_remove.changed
+      register: pip_proxy_restore
+    
+    - name: PIP 代理关闭完成
+      debug:
+        msg: "PIP 代理关闭成功！已恢复原始配置文件 ~/.pip/pip.conf"
+      become: no
+      when: disable_pip_proxy | bool and pip_proxy_restore.changed
+    
+    - name: PIP 代理备份不存在提示
+      debug:
+        msg: "没有找到 PIP 代理配置备份文件 ~/.pip/pip.conf.playbook.bak，无法恢复原始配置"
+      become: no
+      when: disable_pip_proxy | bool and not pip_bak_file_state.stat.exists
+    
+    # ============= WGET 代理关闭 =============
+    - name: 检查是否关闭 WGET 代理
+      debug:
+        msg: "开始关闭 WGET 代理..."
+      when: disable_wget_proxy | bool
+    
+    - name: 检查 WGET 代理备份文件是否存在
+      stat:
+        path: ~/.wgetrc.playbook.bak
+      register: wget_bak_file_state
+      become: no
+      when: disable_wget_proxy | bool
+    
+    - name: 检查 WGET 代理配置文件是否存在
+      stat:
+        path: ~/.wgetrc
+      register: wget_file_state
+      become: no
+      when: disable_wget_proxy | bool
+    
+    - name: 移除 WGET 代理配置文件
+      file:
+        path: ~/.wgetrc
+        state: absent
+      become: no
+      when: disable_wget_proxy | bool and wget_file_state.stat.exists and wget_bak_file_state.stat.exists
+      register: wget_proxy_remove
+    
+    - name: 从备份恢复 WGET 代理配置文件
+      copy:
+        src: ~/.wgetrc.playbook.bak
+        dest: ~/.wgetrc
+        remote_src: yes
+      become: no
+      when: disable_wget_proxy | bool and wget_bak_file_state.stat.exists and wget_proxy_remove.changed
+      register: wget_proxy_restore
+    
+    - name: WGET 代理关闭完成
+      debug:
+        msg: "WGET 代理关闭成功！已恢复原始配置文件 ~/.wgetrc"
+      become: no
+      when: disable_wget_proxy | bool and wget_proxy_restore.changed
+    
+    - name: WGET 代理备份不存在提示
+      debug:
+        msg: "没有找到 WGET 代理配置备份文件 ~/.wgetrc.playbook.bak，无法恢复原始配置"
+      become: no
+      when: disable_wget_proxy | bool and not wget_bak_file_state.stat.exists
+    
+    # ============= CURL 代理关闭 =============
+    - name: 检查是否关闭 CURL 代理
+      debug:
+        msg: "开始关闭 CURL 代理..."
+      when: disable_curl_proxy | bool
+    
+    - name: 检查 CURL 代理备份文件是否存在
+      stat:
+        path: ~/.curlrc.playbook.bak
+      register: curl_bak_file_state
+      become: no
+      when: disable_curl_proxy | bool
+    
+    - name: 检查 CURL 代理配置文件是否存在
+      stat:
+        path: ~/.curlrc
+      register: curl_file_state
+      become: no
+      when: disable_curl_proxy | bool
+    
+    - name: 移除 CURL 代理配置文件
+      file:
+        path: ~/.curlrc
+        state: absent
+      become: no
+      when: disable_curl_proxy | bool and curl_file_state.stat.exists and curl_bak_file_state.stat.exists
+      register: curl_proxy_remove
+    
+    - name: 从备份恢复 CURL 代理配置文件
+      copy:
+        src: ~/.curlrc.playbook.bak
+        dest: ~/.curlrc
+        remote_src: yes
+      become: no
+      when: disable_curl_proxy | bool and curl_bak_file_state.stat.exists and curl_proxy_remove.changed
+      register: curl_proxy_restore
+    
+    - name: CURL 代理关闭完成
+      debug:
+        msg: "CURL 代理关闭成功！已恢复原始配置文件 ~/.curlrc"
+      become: no
+      when: disable_curl_proxy | bool and curl_proxy_restore.changed
+    
+    - name: CURL 代理备份不存在提示
+      debug:
+        msg: "没有找到 CURL 代理配置备份文件 ~/.curlrc.playbook.bak，无法恢复原始配置"
+      become: no
+      when: disable_curl_proxy | bool and not curl_bak_file_state.stat.exists
+    
+    # ============= Docker 代理关闭 =============
+    - name: 检查是否关闭 Docker 代理
+      debug:
+        msg: "开始关闭 Docker 代理..."
+      when: disable_docker_proxy | bool
+    
+    - name: 检查 Docker 代理备份文件是否存在
+      stat:
+        path: /etc/systemd/system/docker.service.d/http-proxy.conf.playbook.bak
+      register: docker_bak_file_state
+      when: disable_docker_proxy | bool
+    
+    - name: 检查 Docker 代理配置文件是否存在
+      stat:
+        path: /etc/systemd/system/docker.service.d/http-proxy.conf
+      register: docker_file_state
+      when: disable_docker_proxy | bool
+    
+    - name: 移除 Docker 代理配置文件
+      file:
+        path: /etc/systemd/system/docker.service.d/http-proxy.conf
+        state: absent
+      when: disable_docker_proxy | bool and docker_file_state.stat.exists and docker_bak_file_state.stat.exists
+      register: docker_proxy_remove
+    
+    - name: 从备份恢复 Docker 代理配置文件
+      copy:
+        src: /etc/systemd/system/docker.service.d/http-proxy.conf.playbook.bak
+        dest: /etc/systemd/system/docker.service.d/http-proxy.conf
+        remote_src: yes
+      when: disable_docker_proxy | bool and docker_bak_file_state.stat.exists and docker_proxy_remove.changed
+      register: docker_proxy_restore
+    
+    - name: 重新加载 systemd 配置
+      systemd:
+        daemon_reload: yes
+      when: disable_docker_proxy | bool and docker_proxy_restore.changed
+    
+    - name: 重启 Docker 服务
+      systemd:
+        name: docker
+        state: restarted
+      when: disable_docker_proxy | bool and docker_proxy_restore.changed
+      ignore_errors: yes
+    
+    - name: Docker 代理关闭完成
+      debug:
+        msg: "Docker 代理关闭成功！已恢复原始配置文件 /etc/systemd/system/docker.service.d/http-proxy.conf"
+      when: disable_docker_proxy | bool and docker_proxy_restore.changed
+    
+    - name: Docker 代理备份不存在提示
+      debug:
+        msg: "没有找到 Docker 代理配置备份文件 /etc/systemd/system/docker.service.d/http-proxy.conf.playbook.bak，无法恢复原始配置"
+      when: disable_docker_proxy | bool and not docker_bak_file_state.stat.exists
+    
+    # ============= 删除无效备份文件 =============
+    - name: 删除系统代理备份文件
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "{{ disable_system_proxy | bool | ternary('/etc/environment.playbook.bak', '') }}"
+        - "{{ disable_apt_proxy | bool | ternary('/etc/apt/apt.conf.d/proxy.conf.playbook.bak', '') }}"
+        - "{{ disable_docker_proxy | bool | ternary('/etc/systemd/system/docker.service.d/http-proxy.conf.playbook.bak', '') }}"
+      when: item != ""
+      register: system_backup_removal
+    
+    - name: 删除用户目录下的代理备份文件
+      file:
+        path: "{{ item }}"
+        state: absent
+      become: no
+      with_items:
+        - "{{ disable_pip_proxy | bool | ternary('~/.pip/pip.conf.playbook.bak', '') }}"
+        - "{{ disable_wget_proxy | bool | ternary('~/.wgetrc.playbook.bak', '') }}"
+        - "{{ disable_curl_proxy | bool | ternary('~/.curlrc.playbook.bak', '') }}"
+      when: item != ""
+      register: user_backup_removal
+    
+    # ============= 配置完成摘要 =============
+    - name: 代理关闭完成摘要
+      debug:
+        msg: |
+          === Ubuntu 系统代理关闭完成 ===
+          
+          已关闭的代理：
+          {% if disable_system_proxy | bool %}
+          {% if env_bak_file_state.stat.exists and env_file_state.stat.exists %}
+          ✅ 系统环境变量代理：/etc/environment (已恢复原始配置)
+          {% elif env_proxy_clean.changed %}
+          ✅ 系统环境变量代理：/etc/environment (已清理当前配置)
+          {% else %}
+          ℹ️ 系统环境变量代理：配置未更改
+          {% endif %}
+          - 设置生效：需要重新登录系统或执行 source /etc/environment
+          {% endif %}
+          
+          {% if disable_apt_proxy | bool %}
+          {% if apt_bak_file_state.stat.exists and apt_file_state.stat.exists %}
+          ✅ APT 包管理器代理：/etc/apt/apt.conf.d/proxy.conf (已恢复原始配置)
+          {% elif apt_proxy_remove.changed %}
+          ✅ APT 包管理器代理：/etc/apt/apt.conf.d/proxy.conf (已清理当前配置)
+          {% else %}
+          ℹ️ APT 包管理器代理：配置未更改
+          {% endif %}
+          - 设置立即生效，可使用 apt-get update 测试
+          {% endif %}
+          
+          {% if disable_pip_proxy | bool %}
+          {% if pip_bak_file_state.stat.exists and pip_file_state.stat.exists %}
+          ✅ PIP 包管理器代理：~/.pip/pip.conf (已恢复原始配置)
+          {% elif pip_proxy_remove.changed %}
+          ✅ PIP 包管理器代理：~/.pip/pip.conf (已清理当前配置)
+          {% else %}
+          ℹ️ PIP 包管理器代理：配置未更改
+          {% endif %}
+          - 设置立即生效，可使用 pip install --upgrade pip 测试
+          {% endif %}
+          
+          {% if disable_wget_proxy | bool %}
+          {% if wget_bak_file_state.stat.exists and wget_file_state.stat.exists %}
+          ✅ Wget 下载工具代理：~/.wgetrc (已恢复原始配置)
+          {% elif wget_proxy_remove.changed %}
+          ✅ Wget 下载工具代理：~/.wgetrc (已清理当前配置)
+          {% else %}
+          ℹ️ Wget 下载工具代理：配置未更改
+          {% endif %}
+          - 设置立即生效，可使用 wget https://www.google.com 测试
+          {% endif %}
+          
+          {% if disable_curl_proxy | bool %}
+          {% if curl_bak_file_state.stat.exists and curl_file_state.stat.exists %}
+          ✅ Curl 下载工具代理：~/.curlrc (已恢复原始配置)
+          {% elif curl_proxy_remove.changed %}
+          ✅ Curl 下载工具代理：~/.curlrc (已清理当前配置)
+          {% else %}
+          ℹ️ Curl 下载工具代理：配置未更改
+          {% endif %}
+          - 设置立即生效，可使用 curl https://www.google.com 测试
+          {% endif %}
+          
+          {% if disable_docker_proxy | bool %}
+          {% if docker_bak_file_state.stat.exists and docker_file_state.stat.exists %}
+          ✅ Docker 容器代理：/etc/systemd/system/docker.service.d/http-proxy.conf (已恢复原始配置)
+          {% elif docker_file_state.stat.exists and docker_proxy_remove.changed %}
+          ✅ Docker 容器代理：/etc/systemd/system/docker.service.d/http-proxy.conf (已清理当前配置)
+          {% else %}
+          ℹ️ Docker 容器代理：配置未更改
+          {% endif %}
+          - 设置在 Docker 服务重启后生效，可使用 docker info | grep -i proxy 查看代理配置
+          {% endif %} 
+    
+    # ============= 删除代理锁文件 =============
+    - name: 检查代理锁文件是否存在
+      stat:
+        path: /tmp/ansible-proxy.lock
+      register: proxy_lock_file
+      
+    - name: 删除代理锁文件
+      file:
+        path: /tmp/ansible-proxy.lock
+        state: absent
+      when: proxy_lock_file.stat.exists
+      register: lock_file_removed
+    
+    - name: 显示锁文件删除状态
+      debug:
+        msg: "代理锁文件已删除: /tmp/ansible-proxy.lock"
+      when: lock_file_removed.changed
+    
+    - name: 锁文件不存在提示
+      debug:
+        msg: "代理锁文件不存在，无需删除"
+      when: not proxy_lock_file.stat.exists 

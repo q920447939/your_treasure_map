@@ -1,0 +1,53 @@
+---
+- name: Modify SSH port on Ubuntu 24.04
+  hosts: all
+  become: yes  # 使用sudo权限
+  vars:
+    # 这里不设置默认值，使其成为必传参数
+    ssh_port: "{{ ssh_port }}"
+
+  tasks:
+    - name: Check if SSH port is provided
+      fail:
+        msg: "错误: 必须提供ssh_port参数! 请使用 -e 'ssh_port=端口号' 指定SSH端口。"
+      when: ssh_port is not defined or ssh_port == ""
+
+    - name: Print current SSH port
+      command: grep -E "^Port\s+" /etc/ssh/sshd_config
+      register: current_port
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Display current SSH port
+      debug:
+        msg: "Current SSH port: {{ current_port.stdout | default('Port not explicitly set (default 22)') }}"
+
+    - name: Display new SSH port
+      debug:
+        msg: "Will change SSH port to: {{ ssh_port }}"
+
+    - name: Modify SSH port in sshd_config
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?Port\s+'
+        line: 'Port {{ ssh_port }}'
+        state: present
+      notify: restart ssh
+
+    - name: Modify SSH socket configuration
+      lineinfile:
+        path: /lib/systemd/system/ssh.socket
+        regexp: '^ListenStream='
+        line: 'ListenStream={{ ssh_port }}'
+        state: present
+      notify: reload systemd
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: restart ssh
+      service:
+        name: ssh.socket
+        state: restarted 

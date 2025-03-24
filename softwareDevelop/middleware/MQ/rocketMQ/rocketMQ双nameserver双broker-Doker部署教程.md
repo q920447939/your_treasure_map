@@ -1,5 +1,9 @@
 # RocketMQ双nameserver双broker-Doker部署教程
 
+注: 如果在同一台机器上面部署多个name-server/broker ,那么需要手动调整配置的监听端口号,
+
+这里默认是两台机器
+
 ### 1.镜像拉取
 
 ```
@@ -233,7 +237,7 @@ waitTimeMillsInSendQueue=300  #或者更大
 	-v /usr/local/docker/rocketmq/mqbroker1/logs:/home/rocketmq/logs \
 	--name rmqnamesrv-2 \
 	-e "JAVA_OPT_EXT=-Xms512M -Xmx512M -Xmn128m" \
-	-p 9877:9876 \
+	-p 9876:9876 \
 	foxiswho/rocketmq:4.7.0 sh mqnamesrv
 
 ```
@@ -258,7 +262,7 @@ docker run -d \
 --name rmqbroker-b-master \
 -e "NAMESRV_ADDR=172.18.13.56:9876;172.18.13.56:9877" \
 -e "JAVA_OPT_EXT=-Xms512M -Xmx512M -Xmn128m -XX:-AssumeMP" \
--p 10921:10911 -p 10922:10912 -p 10919:10909 \
+-p 10911:10911 -p 10912:10912 -p 10909:10909 \
 foxiswho/rocketmq:4.7.0 \
 sh mqbroker -c /home/rocketmq/conf/broker-b.properties
 

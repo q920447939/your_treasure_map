@@ -1,0 +1,163 @@
+---
+# MySQL安装Playbook
+# 作用: 在Ubuntu系统上使用Docker安装MySQL
+# 支持: 可重复安装、开机自启动、详细安装信息
+
+- name: MySQL安装
+  hosts: all
+  become: yes
+  vars:
+    mysql_root_password: "blk@2024~NIUBI!mysql%mmm"
+    mysql_port: 63306
+    mysql_data_dir: /opt/dockerstore/mysql
+    mysql_version: "8.0.28"
+
+  tasks:
+    - name: 检查系统环境
+      ansible.builtin.debug:
+        msg: "开始在{{ ansible_distribution }} {{ ansible_distribution_version }}上安装MySQL"
+
+
+    - name: 创建MySQL数据目录
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      with_items:
+        - "{{ mysql_data_dir }}/data"
+        - "{{ mysql_data_dir }}/conf"
+        - "{{ mysql_data_dir }}/log"
+        - "{{ mysql_data_dir }}/mysql-files"
+      register: dir_result
+      
+
+    - name: 复制MySQL配置文件
+      ansible.builtin.copy:
+        src: my.cnf
+        dest: "{{ mysql_data_dir }}/conf/my.cnf"
+        mode: '0644'
+      register: config_copy
+      
+    - name: 显示配置文件复制结果
+      ansible.builtin.debug:
+        msg: "MySQL配置文件复制{{ '成功' if config_copy.failed == false else '失败，请检查文件路径' }}"
+
+    - name: 创建docker-compose.yml文件
+      ansible.builtin.copy:
+        content: |
+          version: '3.8'
+          services:
+            mysql:
+              # 使用 MySQL {{ mysql_version }} 镜像
+              image: mysql:{{ mysql_version }}
+              # 容器名称为 docker_mysql
+              container_name: docker_mysql
+              # 容器退出时自动重启
+              restart: always
+              # 防止被OOM kill, -1000为最低优先级
+              oom_score_adj: -1000
+              environment:
+                # 设置 MySQL root 用户的密码
+                MYSQL_ROOT_PASSWORD: "{{ mysql_root_password }}"
+                MYSQL_ROOT_HOST: "%"
+              ports:
+                - {{ mysql_port }}:3306
+              volumes:
+                # 挂载数据目录
+                - /etc/localtime:/etc/localtime
+                - {{ mysql_data_dir }}/data:/var/lib/mysql
+                - {{ mysql_data_dir }}/conf/my.cnf:/etc/mysql/my.cnf
+                - {{ mysql_data_dir }}/log:/var/log/mysql
+                - {{ mysql_data_dir }}/mysql-files:/var/lib/mysql-files
+              command:
+                --default-authentication-plugin=mysql_native_password
+                --lower_case_table_names=1
+                --character-set-server=utf8mb4
+                --collation-server=utf8mb4_general_ci
+        dest: "{{ mysql_data_dir }}/docker-compose.yml"
+        mode: '0644'
+      register: compose_create
+      
+    - name: 显示docker-compose文件创建结果
+      ansible.builtin.debug:
+        msg: "docker-compose.yml文件创建{{ '成功' if compose_create.failed == false else '失败，请检查目录权限' }}"
+
+    - name: 启动MySQL容器
+      community.docker.docker_compose_v2:   # Changed from docker_compose to docker_compose_v2
+        project_src: "{{ mysql_data_dir }}"
+        files:
+          - docker-compose.yml
+        state: present
+      register: docker_result
+      
+    - name: 显示MySQL容器启动结果
+      ansible.builtin.debug:
+        msg: "MySQL容器启动{{ '成功' if docker_result.failed == false else '失败，请检查Docker服务和配置' }}"
+
+    - name: 配置防火墙(UFW)
+      block:
+        - name: 检查UFW是否安装
+          ansible.builtin.command: which ufw
+          register: ufw_check
+          ignore_errors: yes
+          changed_when: false
+          
+        - name: 检查UFW状态
+          ansible.builtin.command: ufw status
+          register: ufw_status
+          ignore_errors: yes
+          changed_when: false
+          when: ufw_check.rc == 0
+          
+        - name: 允许MySQL端口通过UFW
+          ansible.builtin.command: ufw allow {{ mysql_port }}/tcp
+          when: ufw_check.rc == 0 and ufw_status.stdout is search('active')
+          register: ufw_result
+          ignore_errors: yes
+          
+        - name: 显示UFW配置结果
+          ansible.builtin.debug:
+            msg: "UFW防火墙{{ '已配置开放端口 ' + mysql_port|string if (ufw_check.rc == 0 and ufw_status.stdout is search('active') and ufw_result.failed == false) else '未启动或未安装，请手动配置防火墙开放端口 ' + mysql_port|string }}"
+      when: ansible_distribution == 'Ubuntu'
+
+    - name: 等待MySQL启动
+      ansible.builtin.wait_for:
+        port: "{{ mysql_port }}"
+        delay: 10
+        timeout: 60
+      register: mysql_ready
+      ignore_errors: yes
+      
+    - name: 显示MySQL启动状态
+      ansible.builtin.debug:
+        msg: "MySQL服务{{ '已成功启动并可以连接' if mysql_ready.failed == false else '启动失败或无法连接，请检查日志' }}"
+
+    - name: 显示MySQL安装信息
+      ansible.builtin.debug:
+        msg: |
+          ===== MySQL安装完成 =====
+          
+          安装信息:
+            - MySQL版本: {{ mysql_version }}
+            - 端口: {{ mysql_port }}
+            - 数据目录: {{ mysql_data_dir }}/data
+            - 配置文件: {{ mysql_data_dir }}/conf/my.cnf
+            - 日志目录: {{ mysql_data_dir }}/log
+            
+          连接信息:
+            - 主机: localhost 或服务器IP
+            - 端口: {{ mysql_port }}
+            - 用户名: root
+            - 密码: {{ mysql_root_password }}
+            
+          常用命令:
+            - 查看容器状态: docker ps | grep mysql
+            - 进入MySQL容器: docker exec -it docker_mysql bash
+            - 连接MySQL: mysql -h 127.0.0.1 -P {{ mysql_port }} -u root -p
+            - 重启MySQL: cd {{ mysql_data_dir }} && docker-compose restart
+            - 停止MySQL: cd {{ mysql_data_dir }} && docker-compose down
+            - 启动MySQL: cd {{ mysql_data_dir }} && docker-compose up -d
+            
+          配置文件位置:
+            - Docker Compose配置: {{ mysql_data_dir }}/docker-compose.yml
+            - MySQL配置: {{ mysql_data_dir }}/conf/my.cnf 

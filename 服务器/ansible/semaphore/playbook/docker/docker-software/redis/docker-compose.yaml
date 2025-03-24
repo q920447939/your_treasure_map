@@ -1,0 +1,14 @@
+version: '3'
+services:
+  redis:
+    image: 'redis:6.0'
+    restart: always
+    container_name: docker_redis
+    volumes:
+      - /opt/dockerstore/redis/datadir:/data
+      - /opt/dockerstore/redis/conf/redis.conf:/usr/local/etc/redis/redis.conf
+      - /opt/dockerstore/redis/log:/logs
+    ports:
+      - '61379:6379'
+    command:
+      --requirepass "blk@2024~NIUBI!redis%h"

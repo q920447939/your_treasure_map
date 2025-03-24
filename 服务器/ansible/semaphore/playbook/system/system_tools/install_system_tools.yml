@@ -1,0 +1,438 @@
+---
+# 安装常用系统工具的 Ansible Playbook
+# 此 playbook 用于在 Ubuntu 系统上安装常用的系统工具
+# 每个工具都可以通过变量控制是否安装
+
+- name: 安装常用系统工具
+  hosts: all
+  become: true  # 使用 sudo 权限
+  
+  # 所有变量都定义在 playbook 中
+  vars:
+    # 默认安装的工具
+    install_curl: true      # cURL 工具，用于传输数据
+    install_tree: true      # 树形目录结构显示工具
+    install_unzip: true     # 解压缩工具
+    install_lsof: true      # 列出打开文件的工具
+    install_ss: true        # 替代 netstat 的网络工具
+    
+    # 其他可选工具，默认不安装
+    install_vim: false      # 文本编辑器
+    install_htop: false     # 交互式进程查看器
+    install_git: false      # 版本控制系统
+    install_wget: false     # 网络下载工具
+    install_tmux: false     # 终端复用器
+    install_jq: false       # JSON 处理工具
+    install_net_tools: false # 包含 netstat 等传统网络工具
+    install_iotop: false    # IO 监控工具
+    install_iftop: false    # 网络带宽监控工具
+    install_ncdu: false     # 磁盘使用分析工具
+    
+    timestamp: "{{ ansible_date_time.iso8601_basic_short }}"  # 时间戳，用于备份文件名
+  
+  tasks:
+    # 更新软件包缓存
+    - name: 更新软件包缓存
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600  # 缓存有效期为1小时
+      register: apt_update_result
+      
+    - name: 显示更新软件包缓存结果
+      debug:
+        msg: "软件包缓存已更新"
+      when: apt_update_result.changed
+    
+    # 安装 curl
+    - name: 安装 curl
+      apt:
+        name: curl
+        state: present
+      when: install_curl | bool
+      register: curl_install_result
+    
+    - name: 显示 curl 安装结果
+      debug:
+        msg: "curl 已安装成功"
+      when: curl_install_result.changed
+    
+    # 安装 tree
+    - name: 安装 tree
+      apt:
+        name: tree
+        state: present
+      when: install_tree | bool
+      register: tree_install_result
+    
+    - name: 显示 tree 安装结果
+      debug:
+        msg: "tree 已安装成功"
+      when: tree_install_result.changed
+    
+    # 安装 unzip
+    - name: 安装 unzip
+      apt:
+        name: unzip
+        state: present
+      when: install_unzip | bool
+      register: unzip_install_result
+    
+    - name: 显示 unzip 安装结果
+      debug:
+        msg: "unzip 已安装成功"
+      when: unzip_install_result.changed
+    
+    # 安装 lsof
+    - name: 安装 lsof
+      apt:
+        name: lsof
+        state: present
+      when: install_lsof | bool
+      register: lsof_install_result
+    
+    - name: 显示 lsof 安装结果
+      debug:
+        msg: "lsof 已安装成功"
+      when: lsof_install_result.changed
+    
+    # 安装 ss (iproute2 包)
+    - name: 安装 ss (iproute2)
+      apt:
+        name: iproute2
+        state: present
+      when: install_ss | bool
+      register: ss_install_result
+    
+    - name: 显示 ss 安装结果
+      debug:
+        msg: "ss (iproute2) 已安装成功"
+      when: ss_install_result.changed
+    
+    # 安装 vim
+    - name: 安装 vim
+      apt:
+        name: vim
+        state: present
+      when: install_vim | bool
+      register: vim_install_result
+    
+    - name: 显示 vim 安装结果
+      debug:
+        msg: "vim 已安装成功"
+      when: vim_install_result.changed
+    
+    # 安装 htop
+    - name: 安装 htop
+      apt:
+        name: htop
+        state: present
+      when: install_htop | bool
+      register: htop_install_result
+    
+    - name: 显示 htop 安装结果
+      debug:
+        msg: "htop 已安装成功"
+      when: htop_install_result.changed
+    
+    # 安装 git
+    - name: 安装 git
+      apt:
+        name: git
+        state: present
+      when: install_git | bool
+      register: git_install_result
+    
+    - name: 显示 git 安装结果
+      debug:
+        msg: "git 已安装成功"
+      when: git_install_result.changed
+    
+    # 安装 wget
+    - name: 安装 wget
+      apt:
+        name: wget
+        state: present
+      when: install_wget | bool
+      register: wget_install_result
+    
+    - name: 显示 wget 安装结果
+      debug:
+        msg: "wget 已安装成功"
+      when: wget_install_result.changed
+    
+    # 安装 tmux
+    - name: 安装 tmux
+      apt:
+        name: tmux
+        state: present
+      when: install_tmux | bool
+      register: tmux_install_result
+    
+    - name: 显示 tmux 安装结果
+      debug:
+        msg: "tmux 已安装成功"
+      when: tmux_install_result.changed
+    
+    # 安装 jq
+    - name: 安装 jq
+      apt:
+        name: jq
+        state: present
+      when: install_jq | bool
+      register: jq_install_result
+    
+    - name: 显示 jq 安装结果
+      debug:
+        msg: "jq 已安装成功"
+      when: jq_install_result.changed
+    
+    # 安装 net-tools (包含 netstat)
+    - name: 安装 net-tools
+      apt:
+        name: net-tools
+        state: present
+      when: install_net_tools | bool
+      register: net_tools_install_result
+    
+    - name: 显示 net-tools 安装结果
+      debug:
+        msg: "net-tools 已安装成功"
+      when: net_tools_install_result.changed
+    
+    # 安装 iotop
+    - name: 安装 iotop
+      apt:
+        name: iotop
+        state: present
+      when: install_iotop | bool
+      register: iotop_install_result
+    
+    - name: 显示 iotop 安装结果
+      debug:
+        msg: "iotop 已安装成功"
+      when: iotop_install_result.changed
+    
+    # 安装 iftop
+    - name: 安装 iftop
+      apt:
+        name: iftop
+        state: present
+      when: install_iftop | bool
+      register: iftop_install_result
+    
+    - name: 显示 iftop 安装结果
+      debug:
+        msg: "iftop 已安装成功"
+      when: iftop_install_result.changed
+    
+    # 安装 ncdu
+    - name: 安装 ncdu
+      apt:
+        name: ncdu
+        state: present
+      when: install_ncdu | bool
+      register: ncdu_install_result
+    
+    - name: 显示 ncdu 安装结果
+      debug:
+        msg: "ncdu 已安装成功"
+      when: ncdu_install_result.changed
+    
+    # 打印安装工具的使用说明
+    - name: 打印 curl 使用说明
+      debug:
+        msg: |
+          curl 使用说明:
+          - 基本用法: curl [选项] [URL]
+          - 下载文件: curl -O [URL]
+          - 发送 POST 请求: curl -X POST -d "data" [URL]
+          - 查看帮助: curl --help
+          - 配置文件: ~/.curlrc
+      when: install_curl | bool
+    
+    - name: 打印 tree 使用说明
+      debug:
+        msg: |
+          tree 使用说明:
+          - 基本用法: tree [目录]
+          - 显示隐藏文件: tree -a [目录]
+          - 只显示目录: tree -d [目录]
+          - 显示文件大小: tree -h [目录]
+          - 查看帮助: tree --help
+      when: install_tree | bool
+    
+    - name: 打印 unzip 使用说明
+      debug:
+        msg: |
+          unzip 使用说明:
+          - 基本用法: unzip [文件.zip]
+          - 解压到指定目录: unzip [文件.zip] -d [目录]
+          - 列出压缩文件内容: unzip -l [文件.zip]
+          - 查看帮助: unzip -h
+      when: install_unzip | bool
+    
+    - name: 打印 lsof 使用说明
+      debug:
+        msg: |
+          lsof 使用说明:
+          - 基本用法: lsof [选项]
+          - 查看打开的文件: lsof
+          - 查看指定进程打开的文件: lsof -p [PID]
+          - 查看指定用户打开的文件: lsof -u [用户名]
+          - 查看指定端口: lsof -i :[端口号]
+          - 查看帮助: lsof -h
+      when: install_lsof | bool
+    
+    - name: 打印 ss 使用说明
+      debug:
+        msg: |
+          ss 使用说明:
+          - 基本用法: ss [选项]
+          - 显示所有连接: ss -a
+          - 显示 TCP 连接: ss -t
+          - 显示 UDP 连接: ss -u
+          - 显示监听端口: ss -l
+          - 显示进程信息: ss -p
+          - 查看帮助: ss -h
+          - ss 是 iproute2 包的一部分，替代了传统的 netstat 命令
+      when: install_ss | bool
+    
+    - name: 打印 vim 使用说明
+      debug:
+        msg: |
+          vim 使用说明:
+          - 基本用法: vim [文件名]
+          - 配置文件: ~/.vimrc
+          - 按 i 进入插入模式，Esc 退出插入模式
+          - :w 保存，:q 退出，:wq 保存并退出
+          - 查看帮助: :help 或 vim --help
+      when: install_vim | bool
+    
+    - name: 打印 htop 使用说明
+      debug:
+        msg: |
+          htop 使用说明:
+          - 基本用法: htop
+          - F1 查看帮助
+          - F2 设置
+          - F9 杀死进程
+          - F10 退出
+          - 配置文件: ~/.config/htop/htoprc
+      when: install_htop | bool
+    
+    - name: 打印 git 使用说明
+      debug:
+        msg: |
+          git 使用说明:
+          - 基本用法: git [命令] [参数]
+          - 初始化仓库: git init
+          - 克隆仓库: git clone [URL]
+          - 添加文件: git add [文件]
+          - 提交更改: git commit -m "消息"
+          - 查看状态: git status
+          - 配置文件: ~/.gitconfig
+          - 查看帮助: git --help
+      when: install_git | bool
+    
+    - name: 打印 wget 使用说明
+      debug:
+        msg: |
+          wget 使用说明:
+          - 基本用法: wget [URL]
+          - 下载到指定目录: wget -P [目录] [URL]
+          - 后台下载: wget -b [URL]
+          - 继续下载: wget -c [URL]
+          - 配置文件: ~/.wgetrc
+          - 查看帮助: wget --help
+      when: install_wget | bool
+    
+    - name: 打印 tmux 使用说明
+      debug:
+        msg: |
+          tmux 使用说明:
+          - 基本用法: tmux
+          - 新建会话: tmux new -s [会话名]
+          - 连接会话: tmux attach -t [会话名]
+          - 列出会话: tmux ls
+          - 前缀键: Ctrl+b
+          - 配置文件: ~/.tmux.conf
+          - 查看帮助: tmux --help
+      when: install_tmux | bool
+    
+    - name: 打印 jq 使用说明
+      debug:
+        msg: |
+          jq 使用说明:
+          - 基本用法: jq [过滤器] [JSON文件]
+          - 格式化 JSON: jq . [文件]
+          - 提取字段: jq .[字段] [文件]
+          - 管道使用: curl [URL] | jq .
+          - 查看帮助: jq --help
+      when: install_jq | bool
+    
+    - name: 打印 net-tools 使用说明
+      debug:
+        msg: |
+          net-tools 使用说明:
+          - 包含 netstat, ifconfig, route 等传统网络工具
+          - netstat 基本用法: netstat [选项]
+          - 显示所有连接: netstat -a
+          - 显示路由表: netstat -r
+          - 显示网络接口: ifconfig
+          - 注意: 这些工具已被 iproute2 包中的工具替代
+      when: install_net_tools | bool
+    
+    - name: 打印 iotop 使用说明
+      debug:
+        msg: |
+          iotop 使用说明:
+          - 基本用法: iotop
+          - 只显示正在进行 I/O 的进程: iotop -o
+          - 非交互模式: iotop -b
+          - 查看帮助: iotop -h
+      when: install_iotop | bool
+    
+    - name: 打印 iftop 使用说明
+      debug:
+        msg: |
+          iftop 使用说明:
+          - 基本用法: iftop
+          - 监控特定接口: iftop -i [接口]
+          - 显示端口号: iftop -P
+          - 查看帮助: iftop -h
+      when: install_iftop | bool
+    
+    - name: 打印 ncdu 使用说明
+      debug:
+        msg: |
+          ncdu 使用说明:
+          - 基本用法: ncdu [目录]
+          - 扫描整个文件系统: ncdu /
+          - 排除特定目录: ncdu -X [排除文件] [目录]
+          - 查看帮助: ncdu -h
+      when: install_ncdu | bool
+    
+    # 安装完成总结
+    - name: 安装完成总结
+      debug:
+        msg: |
+          系统工具安装完成！
+          
+          已安装的工具:
+          {% if install_curl | bool %}- curl{% endif %}
+          {% if install_tree | bool %}- tree{% endif %}
+          {% if install_unzip | bool %}- unzip{% endif %}
+          {% if install_lsof | bool %}- lsof{% endif %}
+          {% if install_ss | bool %}- ss (iproute2){% endif %}
+          {% if install_vim | bool %}- vim{% endif %}
+          {% if install_htop | bool %}- htop{% endif %}
+          {% if install_git | bool %}- git{% endif %}
+          {% if install_wget | bool %}- wget{% endif %}
+          {% if install_tmux | bool %}- tmux{% endif %}
+          {% if install_jq | bool %}- jq{% endif %}
+          {% if install_net_tools | bool %}- net-tools{% endif %}
+          {% if install_iotop | bool %}- iotop{% endif %}
+          {% if install_iftop | bool %}- iftop{% endif %}
+          {% if install_ncdu | bool %}- ncdu{% endif %}
+          
+          如需安装其他工具，请修改 playbook 中的变量设置。 

@@ -1,0 +1,37 @@
+---
+# OpenJDK 21 安装变量配置
+
+# OpenJDK版本
+openjdk_version: "21"
+
+# 安装方式: 'package' 使用apt包管理器安装, 'manual' 手动下载安装
+install_method: "package"
+
+# 当install_method为'manual'时的配置
+manual_install:
+  # 下载URL
+  download_url: "https://download.java.net/java/GA/jdk21/fd2272bbf8e04c3dbaee13770090416c/35/GPL/openjdk-21_linux-x64_bin.tar.gz"
+  # 安装目录
+  install_dir: "/opt/java"
+  # 解压后的目录名
+  extracted_dirname: "jdk-21"
+
+# 环境变量配置
+# java_home变量会根据安装方式自动选择正确的路径
+java_home: "{% if install_method == 'package' %}/usr/lib/jvm/java-{{ openjdk_version }}-openjdk-amd64{% else %}{{ manual_install.install_dir }}/{{ manual_install.extracted_dirname }}{% endif %}"
+
+# 是否设置为系统默认Java
+set_as_default: true
+
+# 是否配置环境变量
+configure_environment: true
+
+# 环境变量配置文件
+environment_file: "/etc/profile.d/java.sh"
+
+# 防火墙配置
+firewall:
+  # 是否配置防火墙规则（如果需要）
+  configure: false
+  # 需要开放的端口（如果有）
+  ports: [] 
