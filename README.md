@@ -82,6 +82,10 @@ This is a collection of all kinds of software engineering records, you will alwa
   - ansible
     - md
       - [CentOS7-ansible自动化安装服务器初始化脚本](./服务器/ansible/md/CentOS7-ansible自动化安装服务器初始化脚本.md)
+    - semaphore
+      - [semaphore教程](./服务器/ansible/semaphore/semaphore教程.md)
+    - ubuntu
+      - [基于Ubuntu安装ansible](./服务器/ansible/ubuntu/基于Ubuntu安装ansible.md)
   - java
     - [CentOS7安装JDK21](./服务器/java/CentOS7安装JDK21.md)
   - 国产系统

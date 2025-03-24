@@ -1,0 +1,453 @@
+---
+- name: Install Docker and Docker Compose on Ubuntu
+  hosts: all
+  become: yes  # 使用sudo权限
+  vars:
+    # Docker版本 - 使用最新稳定版本
+    docker_version: "27.0"  # 27.0
+    docker_compose_version: "2.33.0"  # 最新稳定版本，与Docker 24.0+兼容
+    
+    # 是否开机自启
+    docker_start_on_boot: yes
+    
+    # 是否清除Docker数据目录
+    clean_docker_data: no  # 默认不清除数据目录
+    
+    # Docker存储路径配置
+    docker_storage_path: ""  # 默认为空，表示由脚本自动选择
+    
+    # Docker配置选项
+    docker_log_driver: "json-file"
+    docker_log_max_size: "10m"
+    docker_log_max_file: "3"
+    docker_insecure_registries: []  # 不安全的镜像仓库列表
+    docker_registry_mirrors: ['https://docker.1panel.live']     # 镜像加速器列表
+    docker_dns: []                  # DNS服务器列表
+    docker_experimental: false      # 是否启用实验特性
+    
+    # 用户配置
+    docker_users: []  # 要添加到docker组的用户列表
+    
+    # 是否检查本地Docker Compose文件
+    check_local_compose: yes  # 设置为no可以跳过本地文件检查
+    
+    # 时间戳（用于备份文件）
+    timestamp: "{{ ansible_date_time.date }}_{{ ansible_date_time.time | regex_replace(':', '') }}"
+
+  tasks:
+    - name: 停止自动升级服务和定时器
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - apt-daily.timer
+        - apt-daily-upgrade.timer
+        - apt-daily.service
+        - apt-daily-upgrade.service
+      ignore_errors: yes  # 忽略可能的错误，确保脚本继续执行
+ 
+    - name: 显示安装信息
+      debug:
+        msg: "准备安装 Docker {{ docker_version }} 和 Docker Compose {{ docker_compose_version }}"
+
+    # 检查系统信息
+    - name: 检查Ubuntu版本
+      debug:
+        msg: "当前系统: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+    
+    # 卸载旧版本Docker（如果存在）
+    - name: 检查是否已安装Docker
+      command: which docker
+      register: docker_exists
+      ignore_errors: yes
+      changed_when: false
+
+    # 停止Docker相关服务
+    - name: 检查Docker服务状态
+      systemd:
+        name: docker
+        state: stopped
+      ignore_errors: yes
+      when: docker_exists.rc == 0
+      register: docker_stopped
+
+    - name: 显示服务停止信息
+      debug:
+        msg: "已停止Docker服务，准备卸载"
+      when: docker_stopped is changed
+
+    - name: 卸载旧版本Docker（如果存在）
+      apt:
+        name:
+          - docker
+          - docker-engine
+          - docker.io
+          - containerd
+          - runc
+        state: absent
+      when: docker_exists.rc == 0
+      register: docker_uninstall
+      
+    - name: 显示卸载信息
+      debug:
+        msg: "已卸载旧版本Docker"
+      when: docker_uninstall is changed
+
+    # 删除Docker配置文件
+    - name: 检查Docker配置文件是否存在
+      stat:
+        path: /etc/docker/daemon.json
+      register: docker_config_file
+      
+    - name: 删除Docker配置文件
+      file:
+        path: /etc/docker/daemon.json
+        state: absent
+      when: docker_config_file.stat.exists
+      register: docker_config_removed
+      
+    - name: 显示配置文件删除信息
+      debug:
+        msg: "已删除旧的Docker配置文件"
+      when: docker_config_removed is changed
+
+    # 检查Docker配置目录是否存在
+    - name: 检查Docker配置目录是否存在
+      stat:
+        path: /etc/docker
+      register: docker_config_dir
+      
+    - name: 删除Docker配置目录
+      file:
+        path: /etc/docker
+        state: absent
+      when: docker_config_dir.stat.exists
+      register: docker_dir_removed
+      
+    - name: 显示配置目录删除信息
+      debug:
+        msg: "已删除旧的Docker配置目录"
+      when: docker_dir_removed is changed
+
+    # 删除Docker数据目录（如果指定了清理标志）
+    - name: 检查默认Docker数据目录是否存在
+      stat:
+        path: /var/lib/docker
+      register: docker_data_dir
+      when: clean_docker_data is defined and clean_docker_data | bool
+      
+    - name: 警告即将删除Docker数据目录
+      debug:
+        msg: |
+          警告: 即将删除Docker数据目录 /var/lib/docker
+          这将删除所有Docker镜像、容器和卷数据！
+          如果不希望删除数据，请按Ctrl+C终止操作。
+        verbosity: 0
+      when: clean_docker_data is defined and clean_docker_data | bool and docker_data_dir.stat is defined and docker_data_dir.stat.exists
+      
+    - name: 暂停5秒以便确认
+      pause:
+        seconds: 5
+      when: clean_docker_data is defined and clean_docker_data | bool and docker_data_dir.stat is defined and docker_data_dir.stat.exists
+      
+    - name: 删除Docker数据目录
+      file:
+        path: /var/lib/docker
+        state: absent
+      when: clean_docker_data is defined and clean_docker_data | bool and docker_data_dir.stat is defined and docker_data_dir.stat.exists
+      register: docker_data_removed
+      
+    - name: 显示数据目录删除信息
+      debug:
+        msg: "已删除Docker数据目录，所有镜像和容器数据已清除"
+      when: docker_data_removed is defined and docker_data_removed is changed
+
+    # 安装必要的依赖
+    - name: 更新apt缓存
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600  # 缓存有效期1小时
+
+    - name: 安装必要的依赖
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - software-properties-common
+        state: present
+      register: deps_install
+
+    - name: 显示依赖安装信息
+      debug:
+        msg: "已安装必要的依赖包"
+      when: deps_install is changed
+
+    # 添加Docker官方GPG密钥
+    - name: 添加Docker官方GPG密钥
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      register: gpg_key_add
+      ignore_errors: yes
+
+
+    - name: 显示GPG密钥添加信息
+      debug:
+        msg: "已添加Docker官方GPG密钥"
+      when: gpg_key_add is changed
+      ignore_errors: yes
+
+    # 添加Docker官方仓库
+    - name: 添加Docker官方仓库
+      apt_repository:
+        repo: "deb [arch={{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+      register: repo_add
+
+    - name: 显示仓库添加信息
+      debug:
+        msg: "已添加Docker官方仓库"
+      when: repo_add is changed
+
+    # 更新apt缓存
+    - name: 更新apt缓存
+      apt:
+        update_cache: yes
+      when: repo_add is changed
+
+    # 获取可用的Docker版本
+    - name: 获取可用的Docker版本
+      shell: apt-cache madison docker-ce | grep -E "[0-9]:{{ docker_version }}" | head -1 | awk '{print $3}'
+      register: available_version
+      changed_when: false
+      ignore_errors: yes
+
+    - name: 显示可用的Docker版本
+      debug:
+        msg: "找到可用的Docker版本: {{ available_version.stdout if available_version.stdout else '未找到指定版本，将安装最新版本' }}"
+        verbosity: 0
+
+    # 安装指定版本的Docker
+    - name: 安装Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+      register: docker_install
+      when: available_version.stdout == ""
+
+    - name: 安装指定版本的Docker
+      apt:
+        name:
+          - docker-ce={{ available_version.stdout }}
+          - docker-ce-cli={{ available_version.stdout }}
+          - containerd.io
+        state: present
+      register: docker_install_specific
+      when: available_version.stdout != ""
+
+    - name: 显示Docker安装信息
+      debug:
+        msg: "已安装Docker"
+      when: docker_install is changed or docker_install_specific is changed
+
+    # 设置Docker开机自启
+    - name: 设置Docker开机自启
+      systemd:
+        name: docker
+        enabled: "{{ docker_start_on_boot }}"
+        state: started
+      register: docker_service
+
+    - name: 显示Docker服务信息
+      debug:
+        msg: "Docker服务已启动并设置为{{ '开机自启' if docker_start_on_boot else '不开机自启' }}"
+      when: docker_service is changed
+
+    # 设置Docker存储路径
+    - name: 设置Docker存储路径
+      set_fact:
+        actual_docker_path: "{{ docker_storage_path }}"
+      when: docker_storage_path != ""
+
+    - name: 显示选择的存储路径
+      debug:
+        msg: "Docker存储路径设置为: {{ actual_docker_path }}"
+      when: actual_docker_path is defined
+
+    # 创建Docker存储目录
+    - name: 创建Docker存储目录
+      file:
+        path: "{{ actual_docker_path }}"
+        state: directory
+        mode: '0711'
+      when: actual_docker_path is defined
+      register: docker_dir
+
+    - name: 显示目录创建信息
+      debug:
+        msg: "已创建Docker存储目录: {{ actual_docker_path }}"
+      when: docker_dir is changed
+
+    # 停止Docker服务以修改配置
+    - name: 停止Docker服务以修改配置
+      systemd:
+        name: docker
+        state: stopped
+      when: actual_docker_path is defined
+      register: docker_stop
+
+    - name: 显示服务停止信息
+      debug:
+        msg: "已停止Docker服务以修改配置"
+      when: docker_stop is changed
+
+    # 创建Docker配置目录
+    - name: 创建Docker配置目录
+      file:
+        path: /etc/docker
+        state: directory
+        mode: '0755'
+
+    # 配置Docker daemon.json
+    - name: 配置Docker daemon.json
+      template:
+        src: daemon.json.j2
+        dest: /etc/docker/daemon.json
+        mode: '0644'
+      register: docker_config
+      notify: restart docker
+
+    - name: 显示配置信息
+      debug:
+        msg: "已更新Docker配置文件"
+      when: docker_config is changed
+
+    - name: 从本地复制Docker Compose文件
+      copy:
+        src: "docker-compose-{{ ansible_system | lower }}-{{ ansible_architecture }}"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+      register: compose_copy
+
+    - name: 显示Docker Compose安装信息
+      debug:
+        msg: >-
+          已安装Docker Compose {{ docker_compose_version }} 
+          ({% if check_local_compose | bool %}
+            {{ '从本地文件复制' if compose_copy is changed else '已存在' }}
+          {% else %}
+            从GitHub下载
+          {% endif %})
+        verbosity: 0
+
+    # 添加用户到docker组
+    - name: 添加用户到docker组
+      user:
+        name: "{{ item }}"
+        groups: docker
+        append: yes
+      with_items: "{{ docker_users }}"
+      when: docker_users | length > 0
+      register: user_add
+
+    - name: 显示用户添加信息
+      debug:
+        msg: "已将用户 {{ docker_users | join(', ') }} 添加到docker组"
+      when: user_add is changed
+
+    # 验证安装
+    - name: 验证Docker安装
+      command: docker --version
+      register: docker_version_output
+      changed_when: false
+
+    - name: 显示Docker版本
+      debug:
+        msg: "{{ docker_version_output.stdout }}"
+
+    - name: 验证Docker Compose安装
+      command: docker-compose --version
+      register: compose_version_output
+      changed_when: false
+
+    - name: 显示Docker Compose版本
+      debug:
+        msg: "{{ compose_version_output.stdout }}"
+
+    # 触发Docker重启
+    - name: 触发Docker重启
+      command: echo "触发Docker重启"
+      changed_when: true
+      notify: restart docker
+
+    # 强制执行所有通知的handlers
+    - name: 强制执行handlers
+      meta: flush_handlers
+
+    # 显示Docker信息
+    - name: 获取Docker信息
+      command: docker info
+      register: docker_info
+      changed_when: false
+
+    - name: 显示Docker详细信息
+      debug:
+        msg: "{{ docker_info.stdout_lines }}"
+      when: docker_info is defined
+
+    # 显示安装完成信息和使用说明
+    - name: 显示Docker安装完成信息和使用说明
+      debug:
+        msg: |
+          ===== Docker 安装完成 =====
+          
+          Docker 版本: {{ docker_version_output.stdout }}
+          Docker Compose 版本: {{ compose_version_output.stdout }}
+          
+          配置信息:
+          - 存储路径: {{ actual_docker_path | default('/var/lib/docker') }}
+          - 配置文件: /etc/docker/daemon.json
+          - 日志驱动: {{ docker_log_driver }}
+          - 日志大小限制: {{ docker_log_max_size }}
+          - 日志文件数量: {{ docker_log_max_file }}
+          {% if docker_registry_mirrors | length > 0 %}
+          - 镜像加速器: {{ docker_registry_mirrors | join(', ') }}
+          {% endif %}
+          
+          常用命令:
+          - 启动Docker: sudo systemctl start docker
+          - 停止Docker: sudo systemctl stop docker
+          - 重启Docker: sudo systemctl restart docker
+          - 查看状态: sudo systemctl status docker
+          - 查看Docker信息: docker info
+          - 拉取镜像: docker pull [镜像名称]
+          - 运行容器: docker run [选项] [镜像名称]
+          - 查看容器: docker ps
+          - 查看所有容器: docker ps -a
+          - 查看镜像: docker images
+          
+          Docker Compose 命令:
+          - 启动服务: docker-compose up -d
+          - 停止服务: docker-compose down
+          - 查看服务状态: docker-compose ps
+          - 查看服务日志: docker-compose logs
+          
+          如需使用非root用户运行Docker命令，请将用户添加到docker组:
+          sudo usermod -aG docker [用户名]
+          (需要重新登录才能生效)
+          
+          Docker数据目录: {{ actual_docker_path | default('/var/lib/docker') }}
+          Docker配置文件: /etc/docker/daemon.json
+          Docker服务文件: /lib/systemd/system/docker.service
+
+  handlers:
+    - name: restart docker
+      shell: systemctl daemon-reload && systemctl restart docker
+      become: yes 

@@ -1,0 +1,711 @@
+---
+# Ubuntu 系统代理配置 Playbook
+# 该 playbook 用于在 Ubuntu 系统中配置各种应用程序的代理设置
+# 包括系统代理、apt、pip、wget、curl、docker 等
+
+- name: 配置 Ubuntu 系统代理
+  hosts: all
+  become: yes
+  vars:
+    # =======================================================
+    # 代理服务器基本设置
+    # =======================================================
+    # 修改以下配置以适应您的代理环境
+    # 代理服务器主机地址 - 如果是本地代理服务器，通常为 127.0.0.1
+    proxy_host: "127.0.0.1"
+    # 代理服务器端口 - 常见端口如 7890(clash)、8080、1080、8118(privoxy)等
+    proxy_port: "7890"
+    # 完整的HTTP代理URL
+    http_proxy: "http://{{ proxy_host }}:{{ proxy_port }}"
+    # 完整的HTTPS代理URL（通常与HTTP代理相同）
+    https_proxy: "http://{{ proxy_host }}:{{ proxy_port }}"
+    # 不需要使用代理的地址列表，用逗号分隔
+    no_proxy: "localhost,127.0.0.1,local.home"
+    
+    # =======================================================
+    # 配置选项开关
+    # =======================================================
+    # 将不需要配置的项目设置为 false 可跳过相应配置
+    # 系统环境变量代理 (/etc/environment)
+    setup_system_proxy: true
+    # APT 包管理器代理 (/etc/apt/apt.conf.d/proxy.conf)
+    setup_apt_proxy: true
+    # PIP 包管理器代理 (~/.pip/pip.conf)
+    setup_pip_proxy: true
+    # Wget 下载工具代理 (~/.wgetrc)
+    setup_wget_proxy: true
+    # Curl 下载工具代理 (~/.curlrc)
+    setup_curl_proxy: true
+    # Docker 容器代理 (/etc/systemd/system/docker.service.d/http-proxy.conf)
+    setup_docker_proxy: true
+    
+    # =======================================================
+    # 连通性测试设置
+    # =======================================================
+    # 用于测试代理连通性的URL，默认为Google
+    connectivity_test_url: "https://www.google.com"
+    # 代理服务器连接超时时间（秒）
+    proxy_connection_timeout: 3
+    # 代理连通性测试超时时间（秒）
+    connectivity_test_timeout: 5
+  
+  tasks:
+    # ==================================================
+    # 检查锁文件是否存在，如果存在则停止执行
+    # ==================================================
+    - name: 检查代理锁文件是否存在
+      stat:
+        path: /tmp/ansible-proxy.lock
+      register: proxy_lock_file
+
+    - name: 如果锁文件存在则终止执行
+      fail:
+        msg: "已检测到锁文件 /tmp/ansible-proxy.lock，说明代理已经被创建过。如需重新配置代理，请先执行 disable_proxy.yml 关闭现有代理。"
+      when: proxy_lock_file.stat.exists
+    
+    # ==================================================
+    # 第一阶段: 代理信息显示与可用性检测
+    # ==================================================
+    - name: 1. 打印代理配置信息
+      debug:
+        msg: |
+          ===== Ubuntu 系统代理配置信息 =====
+          
+          基本设置:
+          - 代理主机: {{ proxy_host }}
+          - 代理端口: {{ proxy_port }}
+          - HTTP 代理: {{ http_proxy }}
+          - HTTPS 代理: {{ https_proxy }}
+          - 无需代理地址: {{ no_proxy }}
+          
+          连通性测试设置:
+          - 测试网站: {{ connectivity_test_url }}
+          - 代理连接超时: {{ proxy_connection_timeout }}秒
+          - 连通性测试超时: {{ connectivity_test_timeout }}秒
+          
+          将要配置的项目:
+          {% if setup_system_proxy | bool %}✅{% else %}❌{% endif %} 系统环境变量代理 (/etc/environment)
+          {% if setup_apt_proxy | bool %}✅{% else %}❌{% endif %} APT 包管理器代理 (/etc/apt/apt.conf.d/proxy.conf)
+          {% if setup_pip_proxy | bool %}✅{% else %}❌{% endif %} PIP 包管理器代理 (~/.pip/pip.conf)
+          {% if setup_wget_proxy | bool %}✅{% else %}❌{% endif %} Wget 下载工具代理 (~/.wgetrc)
+          {% if setup_curl_proxy | bool %}✅{% else %}❌{% endif %} Curl 下载工具代理 (~/.curlrc)
+          {% if setup_docker_proxy | bool %}✅{% else %}❌{% endif %} Docker 容器代理 (/etc/systemd/system/docker.service.d/http-proxy.conf)
+    
+    # ============= 检测代理连通性 =============
+    - name: 2.1 检测代理服务器是否可达
+      wait_for:
+        host: "{{ proxy_host }}"
+        port: "{{ proxy_port }}"
+        timeout: "{{ proxy_connection_timeout }}"
+      register: proxy_server_check
+      ignore_errors: yes
+    
+    - name: 2.2 显示代理服务器检测结果
+      debug:
+        msg: "代理服务器 {{ proxy_host }}:{{ proxy_port }} {{ '可达' if proxy_server_check.state is defined and proxy_server_check.state == 'started' else '不可达' }}"
+    
+    - name: 2.3 如果代理服务器不可达则中止执行
+      fail:
+        msg: |
+          ❌ 代理服务器检测失败！
+          不能连接到代理服务器 {{ proxy_host }}:{{ proxy_port }}
+          请检查代理服务器是否已启动，以及代理主机和端口配置是否正确。
+      when: proxy_server_check.state is not defined or proxy_server_check.state != "started"
+    
+    #- name: 2.4 检测代理连通性
+    #  uri:
+    #    url: "{{ connectivity_test_url }}"
+    #    timeout: "{{ connectivity_test_timeout }}"
+    #    validate_certs: no
+    #    use_proxy: yes
+    #    proxy_url: "{{ http_proxy }}"
+    #  register: proxy_connectivity
+    #  ignore_errors: yes
+    #  become: no
+    #
+    #- name: 2.5 显示连通性检测结果
+    #  debug:
+    #    msg: "代理连通性测试{{ '成功' if proxy_connectivity.status == 200 else '失败' }}，HTTP状态码: {{ proxy_connectivity.status | default('无返回状态码') }}"
+    #  when: proxy_connectivity is defined
+    #
+    #- name: 2.6 如果代理不可用则中止执行
+    #  fail:
+    #    msg: |
+    #      ❌ 代理连通性测试失败！
+    #      不能通过代理 {{ proxy_host }}:{{ proxy_port }} 连接到测试网站 {{ connectivity_test_url }}
+    #      请检查代理配置和代理服务器是否正常运行，或者目标网站是否可访问。
+    #      错误信息: {{ proxy_connectivity.msg | default('无详细错误信息') }}
+    #  when: proxy_connectivity.status is not defined or proxy_connectivity.status != 200
+    #  ignore_errors: yes
+    
+    # ==================================================
+    # 第二阶段: 系统环境代理配置
+    # ==================================================
+    - name: 检查是否设置系统代理
+      debug:
+        msg: "开始设置系统代理..."
+      when: setup_system_proxy | bool
+    
+    - name: 检查系统环境变量配置文件是否存在
+      stat:
+        path: /etc/environment
+      register: env_file
+      when: setup_system_proxy | bool
+    
+    - name: 检查系统环境变量配置备份文件是否存在
+      stat:
+        path: /etc/environment.playbook.bak
+      register: env_bak_file
+      when: setup_system_proxy | bool
+    
+    - name: 如果备份文件已存在，删除备份文件
+      file:
+        path: /etc/environment.playbook.bak
+        state: absent
+      when: setup_system_proxy | bool and env_bak_file.stat.exists
+      register: env_bak_removed
+    
+    - name: 如果原始文件存在，创建系统环境变量配置备份
+      copy:
+        src: /etc/environment
+        dest: /etc/environment.playbook.bak
+        remote_src: yes
+      when: setup_system_proxy | bool and env_file.stat.exists
+      register: env_bak_created
+    
+    - name: 如果原始文件不存在，创建空的备份文件
+      copy:
+        content: ""
+        dest: /etc/environment.playbook.bak
+      when: setup_system_proxy | bool and not env_file.stat.exists
+      register: env_empty_bak_created
+    
+    # 使用 lineinfile 代替 blockinfile，以避免在多次运行时重复添加代理配置块
+    - name: 添加或更新 http_proxy 环境变量
+      lineinfile:
+        path: /etc/environment
+        regexp: '^http_proxy='
+        line: 'http_proxy="{{ http_proxy }}"'
+        state: present
+      when: setup_system_proxy | bool
+      register: http_proxy_added
+    
+    - name: 添加或更新 https_proxy 环境变量
+      lineinfile:
+        path: /etc/environment
+        regexp: '^https_proxy='
+        line: 'https_proxy="{{ https_proxy }}"'
+        state: present
+      when: setup_system_proxy | bool
+      register: https_proxy_added
+    
+    - name: 添加或更新 ftp_proxy 环境变量
+      lineinfile:
+        path: /etc/environment
+        regexp: '^ftp_proxy='
+        line: 'ftp_proxy="{{ http_proxy }}"'
+        state: present
+      when: setup_system_proxy | bool
+      register: ftp_proxy_added
+    
+    - name: 添加或更新 HTTP_PROXY 环境变量
+      lineinfile:
+        path: /etc/environment
+        regexp: '^HTTP_PROXY='
+        line: 'HTTP_PROXY="{{ http_proxy }}"'
+        state: present
+      when: setup_system_proxy | bool
+      register: HTTP_PROXY_added
+    
+    - name: 添加或更新 HTTPS_PROXY 环境变量
+      lineinfile:
+        path: /etc/environment
+        regexp: '^HTTPS_PROXY='
+        line: 'HTTPS_PROXY="{{ https_proxy }}"'
+        state: present
+      when: setup_system_proxy | bool
+      register: HTTPS_PROXY_added
+    
+    - name: 添加或更新 FTP_PROXY 环境变量
+      lineinfile:
+        path: /etc/environment
+        regexp: '^FTP_PROXY='
+        line: 'FTP_PROXY="{{ http_proxy }}"'
+        state: present
+      when: setup_system_proxy | bool
+      register: FTP_PROXY_added
+    
+    - name: 添加或更新 no_proxy 环境变量
+      lineinfile:
+        path: /etc/environment
+        regexp: '^no_proxy='
+        line: 'no_proxy="{{ no_proxy }}"'
+        state: present
+      when: setup_system_proxy | bool
+      register: no_proxy_added
+    
+    - name: 添加或更新 NO_PROXY 环境变量
+      lineinfile:
+        path: /etc/environment
+        regexp: '^NO_PROXY='
+        line: 'NO_PROXY="{{ no_proxy }}"'
+        state: present
+      when: setup_system_proxy | bool
+      register: NO_PROXY_added
+    
+    - name: 设置系统代理修改状态变量
+      set_fact:
+        system_proxy_changed: "{{ http_proxy_added.changed or https_proxy_added.changed or ftp_proxy_added.changed or HTTP_PROXY_added.changed or HTTPS_PROXY_added.changed or FTP_PROXY_added.changed or no_proxy_added.changed or NO_PROXY_added.changed }}"
+      when: setup_system_proxy | bool
+    
+    - name: 系统代理设置完成
+      debug:
+        msg: "系统代理设置成功！配置文件位置: /etc/environment"
+      when: setup_system_proxy | bool and system_proxy_changed
+    
+    # ==================================================
+    # 第三阶段: APT 包管理器代理配置
+    # ==================================================
+    - name: 检查是否设置 APT 代理
+      debug:
+        msg: "开始设置 APT 代理..."
+      when: setup_apt_proxy | bool
+    
+    - name: 检查 APT 代理配置文件是否存在
+      stat:
+        path: /etc/apt/apt.conf.d/proxy.conf
+      register: apt_file
+      when: setup_apt_proxy | bool
+    
+    - name: 检查 APT 代理备份文件是否存在
+      stat:
+        path: /etc/apt/apt.conf.d/proxy.conf.playbook.bak
+      register: apt_bak_file
+      when: setup_apt_proxy | bool
+    
+    - name: 如果备份文件已存在，删除备份文件
+      file:
+        path: /etc/apt/apt.conf.d/proxy.conf.playbook.bak
+        state: absent
+      when: setup_apt_proxy | bool and apt_bak_file.stat.exists
+      register: apt_bak_removed
+    
+    - name: 如果原始文件存在，创建 APT 代理配置备份
+      copy:
+        src: /etc/apt/apt.conf.d/proxy.conf
+        dest: /etc/apt/apt.conf.d/proxy.conf.playbook.bak
+        remote_src: yes
+      when: setup_apt_proxy | bool and apt_file.stat.exists
+      register: apt_bak_created
+    
+    - name: 如果原始文件不存在，创建空的备份文件
+      copy:
+        content: ""
+        dest: /etc/apt/apt.conf.d/proxy.conf.playbook.bak
+      when: setup_apt_proxy | bool and not apt_file.stat.exists
+      register: apt_empty_bak_created
+    
+    - name: 配置 APT 代理
+      copy:
+        dest: /etc/apt/apt.conf.d/proxy.conf
+        content: |
+          Acquire::http::Proxy "{{ http_proxy }}";
+          Acquire::https::Proxy "{{ https_proxy }}";
+          Acquire::ftp::Proxy "{{ http_proxy }}";
+      when: setup_apt_proxy | bool
+      register: apt_proxy_result
+    
+    - name: APT 代理设置完成
+      debug:
+        msg: "APT 代理设置成功！配置文件位置: /etc/apt/apt.conf.d/proxy.conf"
+      when: setup_apt_proxy | bool and apt_proxy_result.changed
+    
+    # ==================================================
+    # 第四阶段: PIP 包管理器代理配置
+    # ==================================================
+    - name: 检查是否设置 PIP 代理
+      debug:
+        msg: "开始设置 PIP 代理..."
+      when: setup_pip_proxy | bool
+    
+    - name: 确保 ~/.pip 目录存在
+      file:
+        path: ~/.pip
+        state: directory
+        mode: '0755'
+      become: no
+      when: setup_pip_proxy | bool
+    
+    - name: 检查 PIP 代理配置文件是否存在
+      stat:
+        path: ~/.pip/pip.conf
+      register: pip_file
+      become: no
+      when: setup_pip_proxy | bool
+    
+    - name: 检查 PIP 代理备份文件是否存在
+      stat:
+        path: ~/.pip/pip.conf.playbook.bak
+      register: pip_bak_file
+      become: no
+      when: setup_pip_proxy | bool
+    
+    - name: 如果备份文件已存在，删除备份文件
+      file:
+        path: ~/.pip/pip.conf.playbook.bak
+        state: absent
+      become: no
+      when: setup_pip_proxy | bool and pip_bak_file.stat.exists
+      register: pip_bak_removed
+    
+    - name: 如果原始文件存在，创建 PIP 代理配置备份
+      copy:
+        src: ~/.pip/pip.conf
+        dest: ~/.pip/pip.conf.playbook.bak
+        remote_src: yes
+      become: no
+      when: setup_pip_proxy | bool and pip_file.stat.exists
+      register: pip_bak_created
+    
+    - name: 如果原始文件不存在，创建空的备份文件
+      copy:
+        content: ""
+        dest: ~/.pip/pip.conf.playbook.bak
+      become: no
+      when: setup_pip_proxy | bool and not pip_file.stat.exists
+      register: pip_empty_bak_created
+    
+    - name: 配置 PIP 代理
+      copy:
+        dest: ~/.pip/pip.conf
+        content: |
+          [global]
+          proxy = {{ http_proxy }}
+      become: no
+      when: setup_pip_proxy | bool
+      register: pip_proxy_result
+    
+    - name: PIP 代理设置完成
+      debug:
+        msg: "PIP 代理设置成功！配置文件位置: ~/.pip/pip.conf"
+      when: setup_pip_proxy | bool and pip_proxy_result.changed
+    
+    # ==================================================
+    # 第五阶段: WGET 下载工具代理配置
+    # ==================================================
+    - name: 检查是否设置 WGET 代理
+      debug:
+        msg: "开始设置 WGET 代理..."
+      when: setup_wget_proxy | bool
+    
+    - name: 检查 WGET 代理配置文件是否存在
+      stat:
+        path: ~/.wgetrc
+      register: wget_file
+      become: no
+      when: setup_wget_proxy | bool
+    
+    - name: 检查 WGET 代理备份文件是否存在
+      stat:
+        path: ~/.wgetrc.playbook.bak
+      register: wget_bak_file
+      become: no
+      when: setup_wget_proxy | bool
+    
+    - name: 如果备份文件已存在，删除备份文件
+      file:
+        path: ~/.wgetrc.playbook.bak
+        state: absent
+      become: no
+      when: setup_wget_proxy | bool and wget_bak_file.stat.exists
+      register: wget_bak_removed
+    
+    - name: 如果原始文件存在，创建 WGET 代理配置备份
+      copy:
+        src: ~/.wgetrc
+        dest: ~/.wgetrc.playbook.bak
+        remote_src: yes
+      become: no
+      when: setup_wget_proxy | bool and wget_file.stat.exists
+      register: wget_bak_created
+    
+    - name: 如果原始文件不存在，创建空的备份文件
+      copy:
+        content: ""
+        dest: ~/.wgetrc.playbook.bak
+      become: no
+      when: setup_wget_proxy | bool and not wget_file.stat.exists
+      register: wget_empty_bak_created
+    
+    - name: 配置 WGET 代理
+      copy:
+        dest: ~/.wgetrc
+        content: |
+          http_proxy = {{ http_proxy }}
+          https_proxy = {{ https_proxy }}
+          use_proxy = on
+      become: no
+      when: setup_wget_proxy | bool
+      register: wget_proxy_result
+    
+    - name: WGET 代理设置完成
+      debug:
+        msg: "WGET 代理设置成功！配置文件位置: ~/.wgetrc"
+      when: setup_wget_proxy | bool and wget_proxy_result.changed
+    
+    # ==================================================
+    # 第六阶段: CURL 下载工具代理配置
+    # ==================================================
+    - name: 检查是否设置 CURL 代理
+      debug:
+        msg: "开始设置 CURL 代理..."
+      when: setup_curl_proxy | bool
+    
+    - name: 检查 CURL 代理配置文件是否存在
+      stat:
+        path: ~/.curlrc
+      register: curl_file
+      become: no
+      when: setup_curl_proxy | bool
+    
+    - name: 检查 CURL 代理备份文件是否存在
+      stat:
+        path: ~/.curlrc.playbook.bak
+      register: curl_bak_file
+      become: no
+      when: setup_curl_proxy | bool
+    
+    - name: 如果备份文件已存在，删除备份文件
+      file:
+        path: ~/.curlrc.playbook.bak
+        state: absent
+      become: no
+      when: setup_curl_proxy | bool and curl_bak_file.stat.exists
+      register: curl_bak_removed
+    
+    - name: 如果原始文件存在，创建 CURL 代理配置备份
+      copy:
+        src: ~/.curlrc
+        dest: ~/.curlrc.playbook.bak
+        remote_src: yes
+      become: no
+      when: setup_curl_proxy | bool and curl_file.stat.exists
+      register: curl_bak_created
+    
+    - name: 如果原始文件不存在，创建空的备份文件
+      copy:
+        content: ""
+        dest: ~/.curlrc.playbook.bak
+      become: no
+      when: setup_curl_proxy | bool and not curl_file.stat.exists
+      register: curl_empty_bak_created
+    
+    - name: 配置 CURL 代理
+      copy:
+        dest: ~/.curlrc
+        content: |
+          proxy={{ http_proxy }}
+      become: no
+      when: setup_curl_proxy | bool
+      register: curl_proxy_result
+    
+    - name: CURL 代理设置完成
+      debug:
+        msg: "CURL 代理设置成功！配置文件位置: ~/.curlrc"
+      when: setup_curl_proxy | bool and curl_proxy_result.changed
+    
+    # ==================================================
+    # 第七阶段: Docker 容器代理配置
+    # ==================================================
+    - name: 检查是否设置 Docker 代理
+      debug:
+        msg: "开始设置 Docker 代理..."
+      when: setup_docker_proxy | bool
+    
+    - name: 确保 Docker 服务配置目录存在
+      file:
+        path: /etc/systemd/system/docker.service.d
+        state: directory
+        mode: '0755'
+      when: setup_docker_proxy | bool
+    
+    - name: 检查 Docker 代理配置文件是否存在
+      stat:
+        path: /etc/systemd/system/docker.service.d/http-proxy.conf
+      register: docker_file
+      when: setup_docker_proxy | bool
+    
+    - name: 检查 Docker 代理备份文件是否存在
+      stat:
+        path: /etc/systemd/system/docker.service.d/http-proxy.conf.playbook.bak
+      register: docker_bak_file
+      when: setup_docker_proxy | bool
+    
+    - name: 如果备份文件已存在，删除备份文件
+      file:
+        path: /etc/systemd/system/docker.service.d/http-proxy.conf.playbook.bak
+        state: absent
+      when: setup_docker_proxy | bool and docker_bak_file.stat.exists
+      register: docker_bak_removed
+    
+    - name: 如果原始文件存在，创建 Docker 代理配置备份
+      copy:
+        src: /etc/systemd/system/docker.service.d/http-proxy.conf
+        dest: /etc/systemd/system/docker.service.d/http-proxy.conf.playbook.bak
+        remote_src: yes
+      when: setup_docker_proxy | bool and docker_file.stat.exists
+      register: docker_bak_created
+    
+    - name: 如果原始文件不存在，创建空的备份文件
+      copy:
+        content: ""
+        dest: /etc/systemd/system/docker.service.d/http-proxy.conf.playbook.bak
+      when: setup_docker_proxy | bool and not docker_file.stat.exists
+      register: docker_empty_bak_created
+    
+    - name: 配置 Docker HTTP 代理
+      copy:
+        dest: /etc/systemd/system/docker.service.d/http-proxy.conf
+        content: |
+          [Service]
+          Environment="HTTP_PROXY={{ http_proxy }}"
+          Environment="HTTPS_PROXY={{ https_proxy }}"
+          Environment="NO_PROXY={{ no_proxy }}"
+      when: setup_docker_proxy | bool
+      register: docker_proxy_result
+    
+    - name: 重新加载 systemd 配置
+      systemd:
+        daemon_reload: yes
+      when: setup_docker_proxy | bool and docker_proxy_result.changed
+    
+    - name: 重启 Docker 服务
+      systemd:
+        name: docker
+        state: restarted
+      when: setup_docker_proxy | bool and docker_proxy_result.changed
+      ignore_errors: yes
+    
+    - name: Docker 代理设置完成
+      debug:
+        msg: "Docker 代理设置成功！配置文件位置: /etc/systemd/system/docker.service.d/http-proxy.conf"
+      when: setup_docker_proxy | bool and docker_proxy_result.changed
+    
+    # ==================================================
+    # 最终阶段: 配置完成摘要
+    # ==================================================
+    - name: 代理配置完成摘要
+      debug:
+        msg: |
+          === Ubuntu 系统代理配置完成 ===
+          
+          配置信息：
+          - HTTP 代理地址: {{ http_proxy }}
+          - HTTPS 代理地址: {{ https_proxy }}
+          - 无需代理地址: {{ no_proxy }}
+          
+          已配置的代理：
+          {% if setup_system_proxy | bool %}
+          {% if env_bak_created is defined and env_bak_created.changed %}
+          ✅ 系统环境变量代理：/etc/environment (已创建备份)
+          {% elif env_empty_bak_created is defined and env_empty_bak_created.changed %}
+          ✅ 系统环境变量代理：/etc/environment (已创建空备份)
+          {% elif env_bak_removed is defined and env_bak_removed.changed %}
+          ✅ 系统环境变量代理：/etc/environment (已更新备份)
+          {% elif system_proxy_changed %}
+          ✅ 系统环境变量代理：/etc/environment
+          {% else %}
+          ℹ️ 系统环境变量代理：配置未更改
+          {% endif %}
+          - 设置生效：需要重新登录系统或执行 source /etc/environment
+          {% endif %}
+          
+          {% if setup_apt_proxy | bool %}
+          {% if apt_bak_created is defined and apt_bak_created.changed %}
+          ✅ APT 包管理器代理：/etc/apt/apt.conf.d/proxy.conf (已创建备份)
+          {% elif apt_empty_bak_created is defined and apt_empty_bak_created.changed %}
+          ✅ APT 包管理器代理：/etc/apt/apt.conf.d/proxy.conf (已创建空备份)
+          {% elif apt_bak_removed is defined and apt_bak_removed.changed %}
+          ✅ APT 包管理器代理：/etc/apt/apt.conf.d/proxy.conf (已更新备份)
+          {% elif apt_proxy_result.changed %}
+          ✅ APT 包管理器代理：/etc/apt/apt.conf.d/proxy.conf
+          {% else %}
+          ℹ️ APT 包管理器代理：配置未更改
+          {% endif %}
+          - 设置立即生效，可使用 apt-get update 测试
+          {% endif %}
+          
+          {% if setup_pip_proxy | bool %}
+          {% if pip_bak_created is defined and pip_bak_created.changed %}
+          ✅ PIP 包管理器代理：~/.pip/pip.conf (已创建备份)
+          {% elif pip_empty_bak_created is defined and pip_empty_bak_created.changed %}
+          ✅ PIP 包管理器代理：~/.pip/pip.conf (已创建空备份)
+          {% elif pip_bak_removed is defined and pip_bak_removed.changed %}
+          ✅ PIP 包管理器代理：~/.pip/pip.conf (已更新备份)
+          {% elif pip_proxy_result.changed %}
+          ✅ PIP 包管理器代理：~/.pip/pip.conf
+          {% else %}
+          ℹ️ PIP 包管理器代理：配置未更改
+          {% endif %}
+          - 设置立即生效，可使用 pip install --upgrade pip 测试
+          {% endif %}
+          
+          {% if setup_wget_proxy | bool %}
+          {% if wget_bak_created is defined and wget_bak_created.changed %}
+          ✅ Wget 下载工具代理：~/.wgetrc (已创建备份)
+          {% elif wget_empty_bak_created is defined and wget_empty_bak_created.changed %}
+          ✅ Wget 下载工具代理：~/.wgetrc (已创建空备份)
+          {% elif wget_bak_removed is defined and wget_bak_removed.changed %}
+          ✅ Wget 下载工具代理：~/.wgetrc (已更新备份)
+          {% elif wget_proxy_result.changed %}
+          ✅ Wget 下载工具代理：~/.wgetrc
+          {% else %}
+          ℹ️ Wget 下载工具代理：配置未更改
+          {% endif %}
+          - 设置立即生效，可使用 wget https://www.google.com 测试
+          {% endif %}
+          
+          {% if setup_curl_proxy | bool %}
+          {% if curl_bak_created is defined and curl_bak_created.changed %}
+          ✅ Curl 下载工具代理：~/.curlrc (已创建备份)
+          {% elif curl_empty_bak_created is defined and curl_empty_bak_created.changed %}
+          ✅ Curl 下载工具代理：~/.curlrc (已创建空备份)
+          {% elif curl_bak_removed is defined and curl_bak_removed.changed %}
+          ✅ Curl 下载工具代理：~/.curlrc (已更新备份)
+          {% elif curl_proxy_result.changed %}
+          ✅ Curl 下载工具代理：~/.curlrc
+          {% else %}
+          ℹ️ Curl 下载工具代理：配置未更改
+          {% endif %}
+          - 设置立即生效，可使用 curl https://www.google.com 测试
+          {% endif %}
+          
+          {% if setup_docker_proxy | bool %}
+          {% if docker_bak_created is defined and docker_bak_created.changed %}
+          ✅ Docker 容器代理：/etc/systemd/system/docker.service.d/http-proxy.conf (已创建备份)
+          {% elif docker_empty_bak_created is defined and docker_empty_bak_created.changed %}
+          ✅ Docker 容器代理：/etc/systemd/system/docker.service.d/http-proxy.conf (已创建空备份)
+          {% elif docker_bak_removed is defined and docker_bak_removed.changed %}
+          ✅ Docker 容器代理：/etc/systemd/system/docker.service.d/http-proxy.conf (已更新备份)
+          {% elif docker_proxy_result.changed %}
+          ✅ Docker 容器代理：/etc/systemd/system/docker.service.d/http-proxy.conf
+          {% else %}
+          ℹ️ Docker 容器代理：配置未更改
+          {% endif %}
+          - 设置在 Docker 服务重启后生效，可使用 docker info | grep -i proxy 查看代理配置
+          {% endif %} 
+
+    # ==================================================
+    # 创建代理锁文件
+    # ==================================================
+    - name: 创建代理锁文件
+      copy:
+        content: "代理已创建于 {{ ansible_date_time.date }} {{ ansible_date_time.time }}\n包含以下代理配置:\n- HTTP 代理: {{ http_proxy }}\n- HTTPS 代理: {{ https_proxy }}\n- 无需代理: {{ no_proxy }}\n\n此文件用于防止重复执行代理配置，如需重新配置代理，请先执行 disable_proxy.yml"
+        dest: /tmp/ansible-proxy.lock
+        mode: '0644'
+      register: lock_file_created
+
+    - name: 显示锁文件创建状态
+      debug:
+        msg: "代理锁文件已创建: /tmp/ansible-proxy.lock"
+      when: lock_file_created.changed 

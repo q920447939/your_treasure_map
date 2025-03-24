@@ -1,0 +1,307 @@
+---
+# Ubuntu系统配置 Playbook
+# 该playbook用于配置Ubuntu系统的基本设置
+# 包括：设置时区、修改主机名和配置Swap分区
+# 作者: Claude
+# 日期: 2023-03-17
+
+- name: Ubuntu系统配置
+  hosts: all
+  become: true
+  
+  # 直接在playbook中定义默认变量
+  vars:
+    # 扁平结构变量（一级变量）
+    # 主机名配置
+    hostname: ""
+    
+    # 时区配置
+    timezone_zone: "Asia/Shanghai"
+    timezone_enable_ntp: true
+    timezone_ntp_servers:
+      - "ntp.aliyun.com"
+      - "cn.pool.ntp.org"
+      - "time.windows.com"
+
+    # Swap分区配置
+    swap_ratio: 0.5
+    swap_file_path: "/swapfile"
+    swap_file_mode: "0600"
+  
+  pre_tasks:
+    - name: 显示所有变量（调试用）
+      ansible.builtin.debug:
+        msg: |
+          所有变量:
+          hostname: {{ hostname | default('未设置') }}
+          timezone_zone: {{ timezone_zone }}
+          timezone_enable_ntp: {{ timezone_enable_ntp }}
+          timezone_ntp_servers: {{ timezone_ntp_servers | to_json }}
+          swap_ratio: {{ swap_ratio }}
+          swap_file_path: {{ swap_file_path }}
+          swap_file_mode: {{ swap_file_mode }}
+      tags:
+        - always
+        - hostname
+  
+  tasks:
+    - name: 检查系统是否为Ubuntu
+      ansible.builtin.fail:
+        msg: "该playbook仅支持Ubuntu系统"
+      when: ansible_distribution != "Ubuntu"
+      tags:
+        - always
+
+    - name: 显示系统信息
+      ansible.builtin.debug:
+        msg: |
+          开始配置系统: {{ ansible_hostname }}
+          操作系统: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          内存: {{ ansible_memtotal_mb }} MB
+      tags:
+        - always
+
+    # 设置时区
+    - name: 设置时区
+      block:
+        - name: 获取系统信息
+          ansible.builtin.setup:
+            gather_subset:
+              - 'min'
+          tags:
+            - timezone
+
+        - name: 显示当前时区
+          ansible.builtin.debug:
+            msg: "当前时区: {{ ansible_date_time.tz }}"
+          tags:
+            - timezone
+
+        - name: 设置系统时区
+          ansible.builtin.timezone:
+            name: "{{ timezone_zone }}"
+          register: timezone_result
+          when: ansible_date_time.tz != timezone_zone
+          tags:
+            - timezone
+
+        - name: 显示时区设置结果
+          ansible.builtin.debug:
+            msg: "时区已设置为: {{ timezone_zone }}"
+          when: timezone_result.changed
+          tags:
+            - timezone
+
+        - name: 检查是否已安装NTP
+          ansible.builtin.apt:
+            name: systemd-timesyncd
+            state: present
+          register: ntp_install
+          when: timezone_enable_ntp | bool
+          tags:
+            - timezone
+            - ntp
+
+        - name: 配置NTP服务器
+          ansible.builtin.template:
+            src: timesyncd.conf.j2
+            dest: /etc/systemd/timesyncd.conf
+            mode: '0644'
+          register: ntp_config
+          when: timezone_enable_ntp | bool
+          tags:
+            - timezone
+            - ntp
+
+        - name: 启用NTP时间同步
+          ansible.builtin.systemd:
+            name: systemd-timesyncd
+            state: restarted
+            enabled: yes
+            daemon_reload: yes
+          register: ntp_service
+          when: timezone_enable_ntp | bool
+          tags:
+            - timezone
+            - ntp
+
+        - name: 显示NTP配置结果
+          ansible.builtin.debug:
+            msg: "NTP时间同步已配置，服务器: {{ timezone_ntp_servers | join(', ') }}"
+          when: timezone_enable_ntp | bool and (ntp_config.changed or ntp_service.changed)
+          tags:
+            - timezone
+            - ntp
+
+    # 修改主机名
+    - name: 显示主机名变量
+      ansible.builtin.debug:
+        msg: |
+          主机名变量 (hostname): '{{ hostname }}'
+          主机名长度: {{ hostname | length }}
+          条件结果: {{ hostname != "" }}
+      tags:
+        - hostname
+
+    - name: 修改主机名
+      when: hostname != ""
+      block:
+        - name: 获取当前主机名
+          ansible.builtin.command: hostname
+          register: current_hostname
+          changed_when: false
+          tags:
+            - hostname
+
+        - name: 显示当前主机名
+          ansible.builtin.debug:
+            msg: "当前主机名: {{ current_hostname.stdout }}"
+          tags:
+            - hostname
+
+        - name: 设置新主机名
+          ansible.builtin.hostname:
+            name: "{{ hostname }}"
+          register: hostname_result
+          tags:
+            - hostname
+
+        - name: 更新/etc/hosts文件
+          ansible.builtin.lineinfile:
+            path: /etc/hosts
+            regexp: "^127.0.1.1\\s+{{ current_hostname.stdout }}(\\s+.*)?$"
+            line: "127.0.1.1 {{ hostname }}"
+            state: present
+          register: hosts_result
+          tags:
+            - hostname
+
+        - name: 显示主机名修改结果
+          ansible.builtin.debug:
+            msg: "主机名已修改: {{ current_hostname.stdout }} -> {{ hostname }}"
+          when: hostname_result.changed or hosts_result.changed
+          tags:
+            - hostname
+
+    # 配置Swap分区
+    - name: 配置Swap分区
+      when: swap_ratio | float > 0
+      block:
+        - name: 计算内存和Swap大小
+          ansible.builtin.set_fact:
+            mem_total_gb: "{{ (ansible_memtotal_mb | int / 1024) | float | round(2) }}"
+            swap_size_gb: "{{ ((ansible_memtotal_mb | int / 1024) * (swap_ratio | float) + 0.5) | int }}"
+          tags:
+            - swap
+
+        - name: 显示内存和计划的Swap大小
+          ansible.builtin.debug:
+            msg: |
+              物理内存: {{ mem_total_gb }} GB
+              计划Swap大小: {{ swap_size_gb }} GB (系数: {{ swap_ratio }})
+          tags:
+            - swap
+
+        - name: 检查当前Swap状态
+          ansible.builtin.shell: swapon --show | wc -l
+          register: swap_status
+          changed_when: false
+          tags:
+            - swap
+
+        - name: 检查Swap文件是否存在
+          ansible.builtin.stat:
+            path: "{{ swap_file_path }}"
+          register: swap_file
+          tags:
+            - swap
+
+        - name: 显示当前Swap状态
+          ansible.builtin.debug:
+            msg: "{{ '当前已配置Swap' if swap_status.stdout | int > 0 else '当前未配置Swap' }}"
+          tags:
+            - swap
+
+        - name: 关闭现有Swap
+          ansible.builtin.command: swapoff -a
+          when: swap_status.stdout | int > 0
+          tags:
+            - swap
+
+        - name: 删除现有Swap文件
+          ansible.builtin.file:
+            path: "{{ swap_file_path }}"
+            state: absent
+          when: swap_file.stat.exists
+          tags:
+            - swap
+
+        - name: 创建Swap文件
+          ansible.builtin.command: "dd if=/dev/zero of={{ swap_file_path }} bs=1G count={{ swap_size_gb }}"
+          args:
+            creates: "{{ swap_file_path }}"
+          register: swap_create
+          tags:
+            - swap
+
+        - name: 设置Swap文件权限
+          ansible.builtin.file:
+            path: "{{ swap_file_path }}"
+            mode: "{{ swap_file_mode }}"
+          tags:
+            - swap
+
+        - name: 格式化Swap文件
+          ansible.builtin.command: "mkswap {{ swap_file_path }}"
+          register: swap_format
+          tags:
+            - swap
+
+        - name: 启用Swap
+          ansible.builtin.command: "swapon {{ swap_file_path }}"
+          register: swap_enable
+          tags:
+            - swap
+
+        - name: 配置开机自动挂载Swap
+          ansible.builtin.lineinfile:
+            path: /etc/fstab
+            regexp: "^{{ swap_file_path | regex_escape }}\\s+none\\s+swap\\s+"
+            line: "{{ swap_file_path }} none swap sw 0 0"
+            state: present
+          register: fstab_result
+          tags:
+            - swap
+
+        - name: 显示Swap配置结果
+          ansible.builtin.debug:
+            msg: "Swap分区已配置: {{ swap_size_gb }} GB"
+          when: swap_create.changed or swap_enable.changed
+          tags:
+            - swap
+
+    # 配置完成后显示信息
+    - name: 显示配置完成信息
+      ansible.builtin.debug:
+        msg: |
+          Ubuntu系统配置完成!
+          
+          配置信息:
+          - 时区: {{ timezone_zone }}
+          - 当前时区: {{ ansible_date_time.tz }}
+          - NTP时间同步: {{ '已启用' if timezone_enable_ntp else '未启用' }}
+          - 主机名: {{ hostname if hostname != "" else ansible_hostname + ' (未修改)' }}
+          - Swap分区: {{ swap_size_gb | default(0) }} GB (系数: {{ swap_ratio }})
+          
+          配置文件:
+          - 时区配置: /etc/timezone
+          - NTP配置: /etc/systemd/timesyncd.conf
+          - Swap文件: {{ swap_file_path if swap_ratio | float > 0 else '未配置' }}
+          
+          操作说明:
+          - 查看当前时区: timedatectl
+          - 查看NTP状态: systemctl status systemd-timesyncd
+          - 查看主机名: hostname
+          - 查看Swap状态: swapon --show 或 free -h
+      tags:
+        - always 

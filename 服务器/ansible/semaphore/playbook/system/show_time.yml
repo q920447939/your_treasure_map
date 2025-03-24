@@ -1,0 +1,10 @@
+- name: #打印实时时间
+  hosts: all
+  tasks:
+    - name: #获取实时时间
+      ansible.builtin.shell: "date '+%Y-%m-%d %H:%M:%S'"
+      register: current_time
+
+    - name: #显示时间
+      ansible.builtin.debug:
+        var: current_time.stdout

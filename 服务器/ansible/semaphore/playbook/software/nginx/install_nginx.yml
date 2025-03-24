@@ -1,0 +1,284 @@
+---
+- name: Install Nginx 1.24 on Ubuntu
+  hosts: all
+  become: yes  # 使用sudo权限
+  vars:
+    nginx_version: "1.24"
+    configure_firewall: yes  # 是否配置防火墙
+    nginx_http_port: 80
+    nginx_https_port: 443
+    nginx_server_name: "{{ ansible_fqdn }}"  # 默认使用主机的FQDN
+    nginx_conf_template: "nginx.conf.j2"  # 可选的配置模板
+
+  tasks:
+    - name: 停止自动升级服务和定时器
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - apt-daily.timer
+        - apt-daily-upgrade.timer
+        - apt-daily.service
+        - apt-daily-upgrade.service
+      ignore_errors: yes  # 忽略可能的错误，确保脚本继续执行
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600  # 缓存有效期1小时
+
+    - name: Install prerequisites
+      apt:
+        name:
+          - curl
+          - gnupg2
+          - ca-certificates
+          - lsb-release
+          - debian-archive-keyring
+        state: present
+
+    - name: Add Nginx signing key
+      apt_key:
+        url: https://nginx.org/keys/nginx_signing.key
+        state: present
+      register: key_result
+      ignore_errors: yes
+
+    # 如果上述方法失败，尝试使用curl下载密钥
+    - name: Download Nginx signing key using curl
+      shell: "curl -fsSL https://nginx.org/keys/nginx_signing.key | apt-key add -"
+      when: key_result is defined and key_result is failed
+
+    - name: Add Nginx repository
+      apt_repository:
+        repo: "deb http://nginx.org/packages/ubuntu/ {{ ansible_distribution_release }} nginx"
+        state: present
+        filename: nginx
+        update_cache: yes
+
+    - name: Install Nginx 1.24
+      apt:
+        name: "nginx={{ nginx_version }}.*"
+        state: present
+        update_cache: yes
+      register: nginx_install
+
+    # 安全地检查防火墙状态
+    - name: Check if UFW is installed
+      command: which ufw
+      register: ufw_installed
+      ignore_errors: yes
+      changed_when: false
+      when: configure_firewall
+
+    - name: Check if UFW is active
+      command: ufw status
+      register: ufw_status
+      ignore_errors: yes
+      changed_when: false
+      when: configure_firewall and ufw_installed.rc == 0
+
+    - name: Get current SSH port
+      shell: netstat -tlpn | grep sshd | awk '{print $4}' | awk -F ':' '{print $NF}' | head -1
+      register: ssh_port_result
+      ignore_errors: yes
+      changed_when: false
+      when: configure_firewall and ufw_installed.rc == 0
+
+    - name: Set SSH port fact
+      set_fact:
+        current_ssh_port: "{{ ssh_port_result.stdout | default('22') }}"
+      when: configure_firewall and ufw_installed.rc == 0
+
+    - name: Display current SSH port
+      debug:
+        msg: "Detected SSH port: {{ current_ssh_port }}"
+      when: configure_firewall and ufw_installed.rc == 0
+
+    # 只有当UFW已安装且已启用时才添加规则
+    - name: Allow HTTP traffic
+      ufw:
+        rule: allow
+        port: "{{ nginx_http_port }}"
+        proto: tcp
+      when: configure_firewall and ufw_installed.rc == 0 and ufw_status.stdout is search('active')
+
+    - name: Allow HTTPS traffic
+      ufw:
+        rule: allow
+        port: "{{ nginx_https_port }}"
+        proto: tcp
+      when: configure_firewall and ufw_installed.rc == 0 and ufw_status.stdout is search('active')
+
+    # 确保SSH端口被允许
+    - name: Ensure SSH port is allowed
+      ufw:
+        rule: allow
+        port: "{{ current_ssh_port }}"
+        proto: tcp
+      when: configure_firewall and ufw_installed.rc == 0 and ufw_status.stdout is search('active')
+
+    # 如果UFW已安装但未启用，只显示警告
+    - name: Display firewall warning
+      debug:
+        msg: |
+          警告: UFW已安装但未启用。
+          如果您计划启用UFW，请确保先添加以下规则以避免SSH连接中断:
+          - sudo ufw allow {{ current_ssh_port }}/tcp (SSH)
+          - sudo ufw allow {{ nginx_http_port }}/tcp (HTTP)
+          - sudo ufw allow {{ nginx_https_port }}/tcp (HTTPS)
+      when: configure_firewall and ufw_installed.rc == 0 and not ufw_status.stdout is search('active')
+
+    # 如果UFW未安装，显示提示信息
+    - name: Display firewall not installed message
+      debug:
+        msg: |
+          提示: 系统未安装UFW防火墙。
+          如果您计划安装并启用防火墙，请确保添加以下规则以避免SSH连接中断:
+          - sudo ufw allow {{ current_ssh_port }}/tcp (SSH)
+          - sudo ufw allow {{ nginx_http_port }}/tcp (HTTP)
+          - sudo ufw allow {{ nginx_https_port }}/tcp (HTTPS)
+      when: configure_firewall and (ufw_installed.rc != 0 or ufw_installed is failed)
+
+    # 创建基本的Nginx配置
+    - name: Create Nginx default site configuration
+      template:
+        src: "{{ nginx_conf_template }}"
+        dest: /etc/nginx/conf.d/default.conf
+      register: nginx_config
+      ignore_errors: yes
+      when: nginx_conf_template is defined and nginx_conf_template != ""
+
+    - name: Create basic Nginx configuration if template not provided
+      copy:
+        content: |
+          server {
+              listen       {{ nginx_http_port }};
+              server_name  {{ nginx_server_name }};
+              
+              location / {
+                  root   /usr/share/nginx/html;
+                  index  index.html index.htm;
+              }
+              
+              error_page   500 502 503 504  /50x.html;
+              location = /50x.html {
+                  root   /usr/share/nginx/html;
+              }
+          }
+        dest: /etc/nginx/conf.d/default.conf
+      when: nginx_conf_template is not defined or nginx_conf_template == "" or nginx_config is failed
+      notify: restart nginx
+
+    # 创建自定义欢迎页面
+    - name: Create custom welcome page
+      copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Welcome to Nginx {{ nginx_version }}</title>
+              <style>
+                  body {
+                      width: 35em;
+                      margin: 0 auto;
+                      font-family: Tahoma, Verdana, Arial, sans-serif;
+                  }
+              </style>
+          </head>
+          <body>
+              <h1>Welcome to Nginx {{ nginx_version }}!</h1>
+              <p>If you see this page, the nginx web server is successfully installed and
+              working on {{ ansible_hostname }}.</p>
+              
+              <p>Server information:</p>
+              <ul>
+                  <li>Hostname: {{ ansible_hostname }}</li>
+                  <li>OS: {{ ansible_distribution }} {{ ansible_distribution_version }}</li>
+                  <li>Nginx version: {{ nginx_version }}</li>
+                  <li>Installation date: {{ ansible_date_time.iso8601 }}</li>
+              </ul>
+              
+              <p>For online documentation and support please refer to
+              <a href="http://nginx.org/">nginx.org</a>.</p>
+          </body>
+          </html>
+        dest: /usr/share/nginx/html/index.html
+      notify: restart nginx
+
+    - name: Start and enable Nginx service
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+      when: nginx_install is succeeded
+
+    - name: Check Nginx version
+      command: nginx -v
+      register: nginx_version_output
+      changed_when: false
+
+    - name: Display Nginx version
+      debug:
+        msg: "{{ nginx_version_output.stderr }}"  # Nginx outputs version to stderr
+
+    - name: Check if Nginx is running
+      uri:
+        url: "http://localhost:{{ nginx_http_port }}"
+        status_code: 200
+      register: nginx_status
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Display Nginx status
+      debug:
+        msg: "Nginx is running and accessible at http://{{ ansible_hostname }}:{{ nginx_http_port }}"
+      when: nginx_status is succeeded
+
+    - name: Display Nginx status (failure)
+      debug:
+        msg: "Nginx is installed but may not be running or accessible"
+      when: nginx_status is failed
+
+    # 打印Nginx相关信息
+    - name: Display Nginx information
+      debug:
+        msg: |
+          ===== Nginx 信息 =====
+          
+          配置文件路径:
+          - 主配置文件: /etc/nginx/nginx.conf
+          - 站点配置目录: /etc/nginx/conf.d/
+          - 默认站点配置: /etc/nginx/conf.d/default.conf
+          - 日志目录: /var/log/nginx/
+          
+          常用命令:
+          - 启动Nginx: sudo systemctl start nginx
+          - 停止Nginx: sudo systemctl stop nginx
+          - 重启Nginx: sudo systemctl restart nginx
+          - 重新加载配置: sudo systemctl reload nginx 或 sudo nginx -s reload
+          - 测试配置文件: sudo nginx -t
+          - 查看状态: sudo systemctl status nginx
+          
+          信号控制:
+          - 重新加载配置: sudo nginx -s reload
+          - 立即停止: sudo nginx -s stop
+          - 优雅停止: sudo nginx -s quit
+          - 重新打开日志文件: sudo nginx -s reopen
+          
+          常用目录:
+          - 默认网站根目录: /usr/share/nginx/html/
+          - 二进制文件: /usr/sbin/nginx
+          - PID文件: /var/run/nginx.pid
+          
+          其他信息:
+          - 当前监听端口: {{ nginx_http_port }} (HTTP), {{ nginx_https_port }} (HTTPS)
+          - 服务器名称: {{ nginx_server_name }}
+          - 用户和组: nginx
+      when: nginx_status is succeeded
+
+  handlers:
+    - name: restart nginx
+      systemd:
+        name: nginx
+        state: restarted 

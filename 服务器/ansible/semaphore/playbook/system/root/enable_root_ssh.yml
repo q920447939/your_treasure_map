@@ -1,0 +1,26 @@
+---
+- name: Enable root SSH login on Ubuntu
+  hosts: all
+  become: yes  # 使用sudo权限
+  tasks:
+    - name: Allow root SSH login
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin yes'
+        state: present
+      notify: restart ssh
+
+    - name: Disable PAM authentication
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^UsePAM'
+        line: 'UsePAM no'
+        state: present
+      notify: restart ssh
+
+  handlers:
+    - name: restart ssh
+      service:
+        name: ssh
+        state: restarted

@@ -1,0 +1,292 @@
+---
+# OpenJDK 21 安装 Playbook
+# 该playbook用于在Ubuntu系统上安装OpenJDK 21
+# 支持通过apt包管理器安装或手动下载安装
+# 作者: Claude
+# 日期: 2023-03-17
+
+- name: 安装 OpenJDK 21
+  hosts: all
+  become: true
+  vars_files:
+    - openjdk_vars.yml
+  
+  tasks:
+    - name: 导入变量文件
+      ansible.builtin.include_vars:
+        file: openjdk_vars.yml
+      tags:
+        - always
+
+    - name: 检查系统是否为Ubuntu
+      ansible.builtin.fail:
+        msg: "该playbook仅支持Ubuntu系统"
+      when: ansible_distribution != "Ubuntu"
+      tags:
+        - always
+
+    - name: 显示安装信息
+      ansible.builtin.debug:
+        msg: "开始在 {{ ansible_hostname }} 上安装 OpenJDK {{ openjdk_version }}"
+      tags:
+        - always
+
+    - name: 停止自动升级服务和定时器
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - apt-daily.timer
+        - apt-daily-upgrade.timer
+        - apt-daily.service
+        - apt-daily-upgrade.service
+      ignore_errors: yes  # 忽略可能的错误，确保脚本继续执行
+
+    # 使用apt包管理器安装OpenJDK
+    - name: 使用apt包管理器安装OpenJDK
+      when: install_method == "package"
+      block:
+        - name: 更新apt缓存
+          ansible.builtin.apt:
+            update_cache: yes
+          register: apt_update_result
+          changed_when: apt_update_result.cache_updated | default(false)
+          tags:
+            - package_install
+
+        - name: 检查是否已安装OpenJDK
+          ansible.builtin.shell: "dpkg -l | grep -E 'openjdk-{{ openjdk_version }}-jdk|openjdk-{{ openjdk_version }}-jre' | wc -l"
+          register: openjdk_installed
+          changed_when: false
+          tags:
+            - package_install
+
+        - name: 显示OpenJDK安装状态
+          ansible.builtin.debug:
+            msg: "OpenJDK {{ openjdk_version }} 已安装"
+          when: openjdk_installed.stdout | int > 0
+          tags:
+            - package_install
+
+        - name: 安装OpenJDK
+          ansible.builtin.apt:
+            name: 
+              - openjdk-{{ openjdk_version }}-jdk
+              - openjdk-{{ openjdk_version }}-jre
+            state: present
+          register: openjdk_install_result
+          when: openjdk_installed.stdout | int == 0
+          tags:
+            - package_install
+
+        - name: 显示安装结果
+          ansible.builtin.debug:
+            msg: "OpenJDK {{ openjdk_version }} 安装成功"
+          when: openjdk_install_result.changed | default(false)
+          tags:
+            - package_install
+
+    # 手动下载安装OpenJDK
+    - name: 手动下载安装OpenJDK
+      when: install_method == "manual"
+      block:
+        - name: 创建安装目录
+          ansible.builtin.file:
+            path: "{{ manual_install.install_dir }}"
+            state: directory
+            mode: '0755'
+          tags:
+            - manual_install
+
+        - name: 检查OpenJDK是否已下载
+          ansible.builtin.stat:
+            path: "{{ manual_install.install_dir }}/openjdk-{{ openjdk_version }}.tar.gz"
+          register: openjdk_archive
+          tags:
+            - manual_install
+
+        - name: 下载OpenJDK
+          ansible.builtin.get_url:
+            url: "{{ manual_install.download_url }}"
+            dest: "{{ manual_install.install_dir }}/openjdk-{{ openjdk_version }}.tar.gz"
+            mode: '0644'
+          when: not openjdk_archive.stat.exists
+          register: download_result
+          tags:
+            - manual_install
+
+        - name: 显示下载结果
+          ansible.builtin.debug:
+            msg: "OpenJDK {{ openjdk_version }} 下载成功"
+          when: download_result.changed | default(false)
+          tags:
+            - manual_install
+
+        - name: 检查OpenJDK是否已解压
+          ansible.builtin.stat:
+            path: "{{ manual_install.install_dir }}/{{ manual_install.extracted_dirname }}"
+          register: openjdk_extracted
+          tags:
+            - manual_install
+
+        - name: 解压OpenJDK
+          ansible.builtin.unarchive:
+            src: "{{ manual_install.install_dir }}/openjdk-{{ openjdk_version }}.tar.gz"
+            dest: "{{ manual_install.install_dir }}"
+            remote_src: yes
+          when: not openjdk_extracted.stat.exists
+          register: extract_result
+          tags:
+            - manual_install
+
+        - name: 显示解压结果
+          ansible.builtin.debug:
+            msg: "OpenJDK {{ openjdk_version }} 解压成功"
+          when: extract_result.changed | default(false)
+          tags:
+            - manual_install
+
+        - name: 设置权限
+          ansible.builtin.file:
+            path: "{{ manual_install.install_dir }}/{{ manual_install.extracted_dirname }}"
+            state: directory
+            mode: '0755'
+            recurse: yes
+          when: extract_result.changed | default(false)
+          tags:
+            - manual_install
+
+    # 配置环境变量
+    - name: 配置Java环境变量
+      when: configure_environment | bool
+      block:
+        - name: 设置JAVA_HOME环境变量
+          ansible.builtin.template:
+            src: java_env.sh.j2
+            dest: "{{ environment_file }}"
+            mode: '0644'
+          register: env_result
+          tags:
+            - configure_env
+
+        - name: 显示环境变量配置结果
+          ansible.builtin.debug:
+            msg: "Java环境变量配置成功"
+          when: env_result.changed | default(false)
+          tags:
+            - configure_env
+
+    # 设置为系统默认Java
+    - name: 设置为系统默认Java
+      when: set_as_default | bool
+      block:
+        - name: 设置默认Java (package安装方式)
+          ansible.builtin.alternatives:
+            name: java
+            path: "{{ java_home }}/bin/java"
+          register: default_result_package
+          when: install_method == "package"
+          tags:
+            - set_default
+
+        - name: 设置默认Java (manual安装方式)
+          block:
+            - name: 创建alternatives链接
+              ansible.builtin.shell: |
+                update-alternatives --install /usr/bin/java java {{ java_home }}/bin/java 1
+                update-alternatives --install /usr/bin/javac javac {{ java_home }}/bin/javac 1
+                update-alternatives --set java {{ java_home }}/bin/java
+                update-alternatives --set javac {{ java_home }}/bin/javac
+              register: default_result_manual
+              when: install_method == "manual"
+              tags:
+                - set_default
+
+        - name: 显示默认Java设置结果
+          ansible.builtin.debug:
+            msg: "OpenJDK {{ openjdk_version }} 已设置为系统默认Java"
+          when: (default_result_package is defined and default_result_package.changed | default(false)) or 
+                (default_result_manual is defined and default_result_manual.changed | default(false))
+          tags:
+            - set_default
+
+    # 检查防火墙状态
+    - name: 检查防火墙状态
+      ansible.builtin.service:
+        name: ufw
+        state: started
+      register: firewall_status
+      check_mode: yes
+      failed_when: false
+      tags:
+        - firewall
+
+    - name: 显示防火墙状态
+      ansible.builtin.debug:
+        msg: "防火墙状态: {{ '启用' if firewall_status.status.ActiveState is defined and firewall_status.status.ActiveState == 'active' else '禁用' }}"
+      tags:
+        - firewall
+
+    # 配置防火墙规则（如果需要且防火墙已启用）
+    - name: 配置防火墙规则
+      when: 
+        - firewall.configure | bool
+        - firewall.ports | length > 0
+        - firewall_status.status.ActiveState is defined
+        - firewall_status.status.ActiveState == 'active'
+      block:
+        - name: 开放防火墙端口
+          ansible.builtin.ufw:
+            rule: allow
+            port: "{{ item }}"
+            proto: tcp
+          loop: "{{ firewall.ports }}"
+          register: firewall_result
+          tags:
+            - firewall
+
+        - name: 显示防火墙配置结果
+          ansible.builtin.debug:
+            msg: "防火墙端口 {{ item }} 已开放"
+          loop: "{{ firewall.ports }}"
+          when: firewall_result.changed | default(false)
+          tags:
+            - firewall
+
+    # 验证安装
+    - name: 验证Java安装
+      block:
+        - name: 检查Java版本
+          ansible.builtin.shell: "java -version 2>&1 | grep -i version"
+          register: java_version
+          changed_when: false
+          tags:
+            - verify
+
+        - name: 显示Java版本
+          ansible.builtin.debug:
+            msg: "Java版本: {{ java_version.stdout }}"
+          tags:
+            - verify
+
+    # 安装完成后显示信息
+    - name: 显示安装完成信息
+      ansible.builtin.debug:
+        msg: |
+          OpenJDK {{ openjdk_version }} 安装完成!
+          
+          安装信息:
+          - 安装方式: {{ "apt包管理器" if install_method == "package" else "手动下载" }}
+          - JAVA_HOME: {{ java_home }}
+          - 环境变量配置文件: {{ environment_file if configure_environment else "未配置" }}
+          - 系统默认Java: {{ "是" if set_as_default else "否" }}
+          
+          使用说明:
+          - 检查Java版本: java -version
+          - 编译Java程序: javac YourProgram.java
+          - 运行Java程序: java YourProgram
+          
+          配置文件:
+          - 变量配置文件: openjdk_vars.yml
+      tags:
+        - always 

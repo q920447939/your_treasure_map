@@ -1,0 +1,247 @@
+---
+# Redis Installation Playbook
+# 
+# This playbook installs Redis using Docker Compose on Ubuntu
+# 
+# Features:
+# - Idempotent installation (can be run multiple times safely)
+# - Auto-start on boot via Docker's restart policy
+# - Configurable parameters through variables
+# - Firewall configuration if ufw is running
+# - Detailed installation summary and usage instructions
+#
+# Usage:
+# ansible-playbook -i inventory redis_install.yml
+#
+# To override default variables:
+# ansible-playbook -i inventory redis_install.yml -e "redis_port=6379 redis_password=mypassword"
+
+- name: Redis Installation
+  hosts: all
+  become: yes
+  vars:
+    # Redis installation directory
+    redis_base_dir: /opt/dockerstore/redis
+    redis_data_dir: "{{ redis_base_dir }}/datadir"
+    redis_log_dir: "{{ redis_base_dir }}/log"
+    redis_conf_dir: "{{ redis_base_dir }}/conf"
+    redis_compose_dir: "{{ redis_base_dir }}/docker-compose"
+    
+    # Redis configuration
+    redis_port: 61379                         # External port for Redis
+    redis_internal_port: 6379                 # Internal container port (usually 6379)
+    redis_password: "blk@2024~NIUBI!redis%h"  # Redis password
+    redis_bind_address: "0.0.0.0"             # Redis bind address
+    redis_protected_mode: "yes"               # Redis protected mode
+    redis_tcp_backlog: 511                    # TCP backlog setting
+    redis_timeout: 0                          # Connection timeout
+    redis_tcp_keepalive: 300                  # TCP keepalive
+    redis_daemonize: "yes"                    # Run as daemon
+    redis_loglevel: "notice"                  # Log level
+    redis_databases: 16                       # Number of databases
+    
+    # Docker configuration
+    redis_image: "redis:6.0"                  # Redis Docker image
+    redis_container_name: "docker_redis"      # Container name
+    
+    # Installation options
+    redis_force_recreate: false               # Force recreation of config files
+    redis_remove_existing: false              # Remove existing installation before setup
+
+  tasks:
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_check
+      ignore_errors: yes
+      changed_when: false
+      
+    - name: Check if Docker Compose is installed
+      command: docker-compose --version
+      register: docker_compose_check
+      ignore_errors: yes
+      changed_when: false
+      
+    - name: Verify Docker and Docker Compose are installed
+      fail:
+        msg: "Docker and/or Docker Compose are not installed. Please install them before running this playbook."
+      when: docker_check.rc != 0 or docker_compose_check.rc != 0
+      
+    - name: Check if Redis container is already running
+      command: docker ps -q -f name={{ redis_container_name }}
+      register: redis_container_check
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Display message if Redis is already running
+      debug:
+        msg: "Redis container is already running. Will check configuration and update if needed."
+      when: redis_container_check.stdout != ""
+      
+    - name: Remove existing Redis installation if requested
+      block:
+        - name: Stop and remove existing Redis container
+          command: docker rm -f {{ redis_container_name }}
+          ignore_errors: yes
+          
+        - name: Remove existing Redis directories
+          file:
+            path: "{{ redis_base_dir }}"
+            state: absent
+          
+        - name: Display removal message
+          debug:
+            msg: "Existing Redis installation has been removed."
+      when: redis_remove_existing | bool
+      
+    - name: Create Redis directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ redis_data_dir }}"
+        - "{{ redis_log_dir }}"
+        - "{{ redis_conf_dir }}"
+        - "{{ redis_compose_dir }}"
+      register: create_dirs
+      
+    - name: Copy Redis configuration file
+      copy:
+        content: |
+          bind {{ redis_bind_address }}
+           
+          protected-mode {{ redis_protected_mode }}
+           
+          port {{ redis_internal_port }}
+           
+          tcp-backlog {{ redis_tcp_backlog }}
+           
+          timeout {{ redis_timeout }}
+           
+          tcp-keepalive {{ redis_tcp_keepalive }}
+           
+          daemonize {{ redis_daemonize }}
+
+          pidfile /var/run/redis/redis.pid
+           
+          loglevel {{ redis_loglevel }}
+           
+           
+          databases {{ redis_databases }}
+        dest: "{{ redis_conf_dir }}/redis.conf"
+        mode: '0644'
+        force: "{{ redis_force_recreate }}"
+      register: copy_conf
+      
+    - name: Create docker-compose.yml file
+      copy:
+        content: |
+          version: '3'
+          services:
+            redis:
+              image: '{{ redis_image }}'
+              restart: always
+              container_name: {{ redis_container_name }}
+              volumes:
+                - {{ redis_data_dir }}:/data
+                - {{ redis_conf_dir }}/redis.conf:/usr/local/etc/redis/redis.conf
+                - {{ redis_log_dir }}:/logs
+              ports:
+                - '{{ redis_port }}:{{ redis_internal_port }}'
+              command:
+                --requirepass "{{ redis_password }}"
+        dest: "{{ redis_compose_dir }}/docker-compose.yml"
+        mode: '0644'
+        force: "{{ redis_force_recreate }}"
+      register: copy_compose
+      
+    - name: Check if UFW is installed and active
+      command: ufw status
+      register: ufw_status
+      ignore_errors: yes
+      changed_when: false
+      
+    - name: Configure UFW if it's active
+      block:
+        - name: Check if Redis port is already allowed in UFW
+          shell: ufw status | grep {{ redis_port }}/tcp
+          register: ufw_port_check
+          ignore_errors: yes
+          changed_when: false
+          
+        - name: Allow Redis port in UFW
+          command: ufw allow {{ redis_port }}/tcp
+          register: ufw_allow
+          when: ufw_port_check.rc != 0
+          
+        - name: Display UFW configuration message
+          debug:
+            msg: "Redis port {{ redis_port }} has been allowed in UFW"
+          when: ufw_allow.changed
+      when: "'active' in ufw_status.stdout"
+      
+    - name: Display firewall warning if UFW is not active
+      debug:
+        msg: "UFW is not active. Please ensure port {{ redis_port }} is accessible if you have another firewall solution in place."
+      when: "ufw_status.rc != 0 or 'inactive' in ufw_status.stdout"
+      
+    - name: Stop Redis container if configuration changed
+      command: docker-compose down
+      args:
+        chdir: "{{ redis_compose_dir }}"
+      when: copy_compose.changed or copy_conf.changed
+      ignore_errors: yes
+      
+    - name: Start Redis using Docker Compose
+      command: docker-compose up -d
+      args:
+        chdir: "{{ redis_compose_dir }}"
+      register: start_redis
+      when: copy_compose.changed or copy_conf.changed or redis_container_check.stdout == "" or redis_remove_existing | bool
+      
+    - name: Ensure Redis container starts on boot
+      systemd:
+        name: docker
+        enabled: yes
+        state: started
+      
+    - name: Verify Redis is running
+      command: docker ps -f name={{ redis_container_name }}
+      register: redis_running_check
+      changed_when: false
+      failed_when: redis_container_name not in redis_running_check.stdout
+      
+    - name: Display installation summary
+      debug:
+        msg: |
+          Redis has been successfully {{ 'installed' if redis_container_check.stdout == '' else 'verified/updated' }}!
+          
+          Configuration details:
+          - Redis is running in a Docker container named {{ redis_container_name }}
+          - Redis is accessible on port {{ redis_port }}
+          - Redis password: {{ redis_password }}
+          - Data directory: {{ redis_data_dir }}
+          - Log directory: {{ redis_log_dir }}
+          - Configuration file: {{ redis_conf_dir }}/redis.conf
+          - Docker Compose file: {{ redis_compose_dir }}/docker-compose.yml
+          
+          Usage instructions:
+          
+          To check Redis status:
+          $ docker ps | grep redis
+          
+          To connect to Redis:
+          $ redis-cli -h localhost -p {{ redis_port }} -a "{{ redis_password }}"
+          
+          To view logs:
+          $ docker logs {{ redis_container_name }}
+          
+          To modify Redis configuration:
+          1. Edit {{ redis_conf_dir }}/redis.conf
+          2. Restart the container: docker restart {{ redis_container_name }}
+          
+          To stop Redis:
+          $ cd {{ redis_compose_dir }} && docker-compose down
+          
+          To start Redis:
+          $ cd {{ redis_compose_dir }} && docker-compose up -d 
