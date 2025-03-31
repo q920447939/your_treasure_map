@@ -7,7 +7,7 @@ This is a collection of all kinds of software engineering records, you will alwa
 
 - IDE
   - Android Studio
-    - [修改模拟器磁盘位置](./IDE/Android Studio/修改模拟器磁盘位置.md)
+    - [修改模拟器磁盘位置](./IDE/Android%20Studio/修改模拟器磁盘位置.md)
   - IDEA
     - [IDEA2024使用docker教程](./IDE/IDEA/IDEA2024使用docker教程.md)
 - clash
@@ -21,15 +21,15 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [docker查看容器挂载](./docker/docker查看容器挂载.md)
 - flutter
   - [AndroidStudio模拟器编辑hosts访问宿主机](./flutter/AndroidStudio模拟器编辑hosts访问宿主机.md)
-  - [Android和Flutter混合开发提示【Failed to apply plugin class 'FlutterPlugin】](./flutter/Android和Flutter混合开发提示【Failed to apply plugin class 'FlutterPlugin】.md)
+  - [Android和Flutter混合开发提示【Failed to apply plugin class 'FlutterPlugin】](./flutter/Android和Flutter混合开发提示【Failed%20to%20apply%20plugin%20class%20'FlutterPlugin】.md)
   - [FireBase接入](./flutter/FireBase接入.md)
-  - [Flutter 调试时卡在 Installing buildappoutputsapkapp.apk](./flutter/Flutter 调试时卡在 Installing buildappoutputsapkapp.apk.md)
+  - [Flutter 调试时卡在 Installing buildappoutputsapkapp.apk](./flutter/Flutter%20调试时卡在%20Installing%20buildappoutputsapkapp.apk.md)
   - [Flutter接入FireBase](./flutter/Flutter接入FireBase.md)
   - [Flutter：web项目跨域问题解决](./flutter/Flutter：web项目跨域问题解决.md)
-  - [Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 1.9.0, expected version is 1.7.1](./flutter/Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 1.9.0, expected version is 1.7.1.md)
+  - [Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 1.9.0, expected version is 1.7.1](./flutter/Module%20was%20compiled%20with%20an%20incompatible%20version%20of%20Kotlin.%20The%20binary%20version%20of%20its%20metadata%20is%201.9.0,%20expected%20version%20is%201.7.1.md)
 - git
   - [Git-pre-commit-hook说明](./git/Git-pre-commit-hook说明.md)
-  - [git【报错】this exceeds GitHub‘s file size limit of 100.00 MB](./git/git【报错】this exceeds GitHub‘s file size limit of 100.00 MB.md)
+  - [git【报错】this exceeds GitHub‘s file size limit of 100.00 MB](./git/git【报错】this%20exceeds%20GitHub‘s%20file%20size%20limit%20of%20100.00%20MB.md)
   - [git已提交到暂存区的文件如何移除](./git/git已提交到暂存区的文件如何移除.md)
 - gitKraken
   - [GitKraken9.x安装教程](./gitKraken/GitKraken9.x安装教程.md)
@@ -43,7 +43,7 @@ This is a collection of all kinds of software engineering records, you will alwa
 - od
   - [OD学习](./od/OD学习.md)
 - python
-  - [pycharm uvicorn作为ASGI服务器的PythonWeb应用使用DEBUG和热更新配置](./python/pycharm uvicorn作为ASGI服务器的PythonWeb应用使用DEBUG和热更新配置.md)
+  - [pycharm uvicorn作为ASGI服务器的PythonWeb应用使用DEBUG和热更新配置](./python/pycharm%20uvicorn作为ASGI服务器的PythonWeb应用使用DEBUG和热更新配置.md)
 - softwareDevelop
   - middleware
     - MQ
@@ -56,14 +56,14 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [SpringBoot适配异步Log4j](./spring-boot/SpringBoot适配异步Log4j.md)
   - [初探SpringBoot源码,maven打包后如何启动的springBoot项目(1)](./spring-boot/初探SpringBoot源码,maven打包后如何启动的springBoot项目(1).md)
   - 记录
-    - [SpringBoot web记一次标记了@RestController和@RequestMapping,但是提示 No static resource ](./spring-boot/记录/SpringBoot web记一次标记了@RestController和@RequestMapping,但是提示 No static resource .md)
+    - [SpringBoot web记一次标记了@RestController和@RequestMapping,但是提示 No static resource ](./spring-boot/记录/SpringBoot%20web记一次标记了@RestController和@RequestMapping,但是提示%20No%20static%20resource%20.md)
     - [SpringBoot记一次basepackageScan失效问题](./spring-boot/记录/SpringBoot记一次basepackageScan失效问题.md)
 - windows
   - [WIN10允许多用户同时远程登录](./windows/WIN10允许多用户同时远程登录.md)
   - [解决浏览器出现“由贵单位管理”“由所属组织管理”](./windows/解决浏览器出现“由贵单位管理”“由所属组织管理”.md)
 - 服务器
   - CentOS7
-    - [CentOS7 一键安装mysql8.0](./服务器/CentOS7/CentOS7 一键安装mysql8.0.md)
+    - [CentOS7 一键安装mysql8.0](./服务器/CentOS7/CentOS7%20一键安装mysql8.0.md)
     - [CentOS7一键修改ssh端口脚本](./服务器/CentOS7/CentOS7一键修改ssh端口脚本.md)
     - [CentOS7使用Clash](./服务器/CentOS7/CentOS7使用Clash.md)
     - [CentOS7使用fail2ban](./服务器/CentOS7/CentOS7使用fail2ban.md)
@@ -96,9 +96,9 @@ This is a collection of all kinds of software engineering records, you will alwa
   - 国产系统
     - [麒麟系统安装Docker](./服务器/国产系统/麒麟系统安装Docker.md)
   - 监控
-    - [CentOS7 grafana监控mysql信息(多节点)](./服务器/监控/CentOS7 grafana监控mysql信息(多节点).md)
-    - [CentOS7 grafana监控主机信息(多节点)](./服务器/监控/CentOS7 grafana监控主机信息(多节点).md)
-    - [CentOS7安装prometheus grafana](./服务器/监控/CentOS7安装prometheus grafana.md)
+    - [CentOS7 grafana监控mysql信息(多节点)](./服务器/监控/CentOS7%20grafana监控mysql信息(多节点).md)
+    - [CentOS7 grafana监控主机信息(多节点)](./服务器/监控/CentOS7%20grafana监控主机信息(多节点).md)
+    - [CentOS7安装prometheus grafana](./服务器/监控/CentOS7安装prometheus%20grafana.md)
     - nightingale(夜莺)
       - [nightingale(夜莺)安装使用教程](./服务器/监控/nightingale(夜莺)/nightingale(夜莺)安装使用教程.md)
 - 油猴脚本
