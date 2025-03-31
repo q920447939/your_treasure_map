@@ -10,6 +10,8 @@ This is a collection of all kinds of software engineering records, you will alwa
     - [修改模拟器磁盘位置](./IDE/Android Studio/修改模拟器磁盘位置.md)
   - IDEA
     - [IDEA2024使用docker教程](./IDE/IDEA/IDEA2024使用docker教程.md)
+- clash
+  - [clash-verge-re集合TUN模式实现全局代理,并实现流量转发功能](./clash/clash-verge-re集合TUN模式实现全局代理,并实现流量转发功能.md)
 - cusor
   - [cusor使用指南](./cusor/cusor使用指南.md)
 - docker
@@ -31,6 +33,9 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [git已提交到暂存区的文件如何移除](./git/git已提交到暂存区的文件如何移除.md)
 - gitKraken
   - [GitKraken9.x安装教程](./gitKraken/GitKraken9.x安装教程.md)
+- network
+  - [Ubuntu使用Hysteria2客户端连接机场](./network/Ubuntu使用Hysteria2客户端连接机场.md)
+  - [使用rustdesk-api对Rustdesk进行web端管理](./network/使用rustdesk-api对Rustdesk进行web端管理.md)
 - nginx
   - [使用Nginx解决端口转发403问题技术方案](./nginx/使用Nginx解决端口转发403问题技术方案.md)
 - npm

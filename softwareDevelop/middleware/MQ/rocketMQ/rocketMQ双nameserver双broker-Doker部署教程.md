@@ -224,7 +224,6 @@ waitTimeMillsInSendQueue=300  #或者更大
 
 ```
 	docker run -d \
-	--network net \
 	-v /usr/local/docker/rocketmq/mqbroker1/logs:/home/rocketmq/logs \
 	--name rmqnamesrv-1 \
 	-e "JAVA_OPT_EXT=-Xms512M -Xmx512M -Xmn128m" \
@@ -233,7 +232,6 @@ waitTimeMillsInSendQueue=300  #或者更大
 
 
 	docker run -d \
-	--network net \
 	-v /usr/local/docker/rocketmq/mqbroker1/logs:/home/rocketmq/logs \
 	--name rmqnamesrv-2 \
 	-e "JAVA_OPT_EXT=-Xms512M -Xmx512M -Xmn128m" \
