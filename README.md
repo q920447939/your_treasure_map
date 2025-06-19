@@ -12,6 +12,7 @@ This is a collection of all kinds of software engineering records, you will alwa
     - [IDEA2024使用docker教程](./IDE/IDEA/IDEA2024使用docker教程.md)
 - clash
   - [clash-verge-re集合TUN模式实现全局代理,并实现流量转发功能](./clash/clash-verge-re集合TUN模式实现全局代理,并实现流量转发功能.md)
+  - [使用mihomo方式启动进行代理](./clash/使用mihomo方式启动进行代理.md)
 - cusor
   - [cusor使用指南](./cusor/cusor使用指南.md)
 - docker
@@ -44,6 +45,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [OD学习](./od/OD学习.md)
 - python
   - [pycharm uvicorn作为ASGI服务器的PythonWeb应用使用DEBUG和热更新配置](./python/pycharm%20uvicorn作为ASGI服务器的PythonWeb应用使用DEBUG和热更新配置.md)
+  - [将python打包为exe程序](./python/将python打包为exe程序.md)
 - softwareDevelop
   - middleware
     - MQ
@@ -60,6 +62,7 @@ This is a collection of all kinds of software engineering records, you will alwa
     - [SpringBoot记一次basepackageScan失效问题](./spring-boot/记录/SpringBoot记一次basepackageScan失效问题.md)
 - windows
   - [WIN10允许多用户同时远程登录](./windows/WIN10允许多用户同时远程登录.md)
+  - [使用nssm将exe,bat等注册成服务](./windows/使用nssm将exe,bat等注册成服务.md)
   - [解决浏览器出现“由贵单位管理”“由所属组织管理”](./windows/解决浏览器出现“由贵单位管理”“由所属组织管理”.md)
 - 服务器
   - CentOS7
@@ -89,6 +92,7 @@ This is a collection of all kinds of software engineering records, you will alwa
       - [CentOS7-ansible自动化安装服务器初始化脚本](./服务器/ansible/md/CentOS7-ansible自动化安装服务器初始化脚本.md)
     - semaphore
       - [semaphore教程](./服务器/ansible/semaphore/semaphore教程.md)
+      - [semaphore迁移](./服务器/ansible/semaphore/semaphore迁移.md)
     - ubuntu
       - [基于Ubuntu安装ansible](./服务器/ansible/ubuntu/基于Ubuntu安装ansible.md)
   - java
