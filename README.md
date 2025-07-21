@@ -45,6 +45,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [OD学习](./od/OD学习.md)
 - python
   - [pycharm uvicorn作为ASGI服务器的PythonWeb应用使用DEBUG和热更新配置](./python/pycharm%20uvicorn作为ASGI服务器的PythonWeb应用使用DEBUG和热更新配置.md)
+  - [python项目使用uv管理包-并在服务器上进行部署](./python/python项目使用uv管理包-并在服务器上进行部署.md)
   - [将python打包为exe程序](./python/将python打包为exe程序.md)
 - softwareDevelop
   - middleware
