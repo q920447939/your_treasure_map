@@ -84,3 +84,33 @@ Installed 22 packages in 12ms
  uv run python main.py
 ```
 
+
+
+
+
+### 其他:
+
+uv 在windows上默认会使用C盘作为缓存
+
+如需要替换路径
+
+1.进行缓存清理
+
+```
+uv cache clean
+```
+
+2.新增环境变量
+
+​	UV_CACHE_DIR    
+
+​	值为 你的路径
+
+3.cmd 检测
+
+```
+uv cache dir
+```
+
+
+
