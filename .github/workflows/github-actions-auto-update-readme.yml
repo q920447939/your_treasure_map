@@ -8,6 +8,8 @@ on:
 jobs:
   update-markdown:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 关键：给予写入权限
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,3 +32,5 @@ jobs:
           git add .
           git commit -m "Update markdown file" || exit 0
           git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 使用自动生成的 token
