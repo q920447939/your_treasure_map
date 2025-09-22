@@ -77,6 +77,8 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [Windows查询最近几条RDP远程登录记录](./windows/Windows查询最近几条RDP远程登录记录.md)
   - [使用nssm将exe,bat等注册成服务](./windows/使用nssm将exe,bat等注册成服务.md)
   - [解决浏览器出现“由贵单位管理”“由所属组织管理”](./windows/解决浏览器出现“由贵单位管理”“由所属组织管理”.md)
+- wireguard
+  - [使用wireguard组网(windows+linux)](./wireguard/使用wireguard组网(windows+linux).md)
 - 开发工具
   - vscode
     - [vscode软件插件大全](./开发工具/vscode/vscode软件插件大全.md)
