@@ -78,6 +78,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [使用nssm将exe,bat等注册成服务](./windows/使用nssm将exe,bat等注册成服务.md)
   - [解决浏览器出现“由贵单位管理”“由所属组织管理”](./windows/解决浏览器出现“由贵单位管理”“由所属组织管理”.md)
 - wireguard
+  - [“偷渡”指南：如何让一台电脑通过另一台电脑访问受限网络](./wireguard/“偷渡”指南：如何让一台电脑通过另一台电脑访问受限网络.md)
   - [使用wireguard组网(windows+linux)](./wireguard/使用wireguard组网(windows+linux).md)
 - 开发工具
   - vscode
@@ -105,6 +106,15 @@ This is a collection of all kinds of software engineering records, you will alwa
     - [Ubuntu22安装Docker-compose](./服务器/Ubuntu/Ubuntu22安装Docker-compose.md)
     - [Ubuntu22安装docker](./服务器/Ubuntu/Ubuntu22安装docker.md)
     - [Ubuntu22设置swap交换区](./服务器/Ubuntu/Ubuntu22设置swap交换区.md)
+    - desktop
+      - [Linux 文件权限管理指南](./服务器/Ubuntu/desktop/Linux%20文件权限管理指南.md)
+      - [Ubuntu 安裝 Maven 並配置 MAVEN_HOME](./服务器/Ubuntu/desktop/Ubuntu%20安裝%20Maven%20並配置%20MAVEN_HOME.md)
+      - [Ubuntu机器把脚本放到桌面上](./服务器/Ubuntu/desktop/Ubuntu机器把脚本放到桌面上.md)
+      - [Ubuntu系统 桌面输入账号密码后，黑屏修复](./服务器/Ubuntu/desktop/Ubuntu系统%20桌面输入账号密码后，黑屏修复.md)
+      - [Ubuntu系统安装搜狗输入法教程](./服务器/Ubuntu/desktop/Ubuntu系统安装搜狗输入法教程.md)
+      - [ubuntu 桌面系统 使用 fcitx，导致 ctrl+alt+b快捷键被占用解决方案](./服务器/Ubuntu/desktop/ubuntu%20桌面系统%20使用%20fcitx，导致%20ctrl+alt+b快捷键被占用解决方案.md)
+      - [修复ubuntu系统 ssh无法启动问题](./服务器/Ubuntu/desktop/修复ubuntu系统%20ssh无法启动问题.md)
+      - [安装Typora](./服务器/Ubuntu/desktop/安装Typora.md)
   - ansible
     - md
       - [CentOS7-ansible自动化安装服务器初始化脚本](./服务器/ansible/md/CentOS7-ansible自动化安装服务器初始化脚本.md)
