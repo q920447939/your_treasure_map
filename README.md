@@ -21,6 +21,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [Docker-compose安装redis](./docker/Docker-compose安装redis.md)
   - [docekr操作记录](./docker/docekr操作记录.md)
   - [docker查看容器挂载](./docker/docker查看容器挂载.md)
+  - [查找docker容器内字体路径](./docker/查找docker容器内字体路径.md)
 - flutter
   - [AndroidStudio模拟器编辑hosts访问宿主机](./flutter/AndroidStudio模拟器编辑hosts访问宿主机.md)
   - [Android和Flutter混合开发提示【Failed to apply plugin class 'FlutterPlugin】](./flutter/Android和Flutter混合开发提示【Failed%20to%20apply%20plugin%20class%20'FlutterPlugin】.md)
@@ -29,6 +30,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [Flutter接入FireBase](./flutter/Flutter接入FireBase.md)
   - [Flutter：web项目跨域问题解决](./flutter/Flutter：web项目跨域问题解决.md)
   - [Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 1.9.0, expected version is 1.7.1](./flutter/Module%20was%20compiled%20with%20an%20incompatible%20version%20of%20Kotlin.%20The%20binary%20version%20of%20its%20metadata%20is%201.9.0,%20expected%20version%20is%201.7.1.md)
+  - [flutter使用fvm本地安装flutter版本](./flutter/flutter使用fvm本地安装flutter版本.md)
 - git
   - [Git-pre-commit-hook说明](./git/Git-pre-commit-hook说明.md)
   - [git【报错】this exceeds GitHub‘s file size limit of 100.00 MB](./git/git【报错】this%20exceeds%20GitHub‘s%20file%20size%20limit%20of%20100.00%20MB.md)
@@ -78,6 +80,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [使用nssm将exe,bat等注册成服务](./windows/使用nssm将exe,bat等注册成服务.md)
   - [解决浏览器出现“由贵单位管理”“由所属组织管理”](./windows/解决浏览器出现“由贵单位管理”“由所属组织管理”.md)
 - wireguard
+  - [Ubuntu系统将wireguard 加入开机自启](./wireguard/Ubuntu系统将wireguard%20加入开机自启.md)
   - [“偷渡”指南：如何让一台电脑通过另一台电脑访问受限网络](./wireguard/“偷渡”指南：如何让一台电脑通过另一台电脑访问受限网络.md)
   - [使用wireguard组网(windows+linux)](./wireguard/使用wireguard组网(windows+linux).md)
 - 开发工具
@@ -109,10 +112,12 @@ This is a collection of all kinds of software engineering records, you will alwa
     - desktop
       - [Linux 文件权限管理指南](./服务器/Ubuntu/desktop/Linux%20文件权限管理指南.md)
       - [Ubuntu 安裝 Maven 並配置 MAVEN_HOME](./服务器/Ubuntu/desktop/Ubuntu%20安裝%20Maven%20並配置%20MAVEN_HOME.md)
+      - [Ubuntu 桌面系统快捷键教程](./服务器/Ubuntu/desktop/Ubuntu%20桌面系统快捷键教程.md)
       - [Ubuntu机器把脚本放到桌面上](./服务器/Ubuntu/desktop/Ubuntu机器把脚本放到桌面上.md)
       - [Ubuntu系统 桌面输入账号密码后，黑屏修复](./服务器/Ubuntu/desktop/Ubuntu系统%20桌面输入账号密码后，黑屏修复.md)
       - [Ubuntu系统安装搜狗输入法教程](./服务器/Ubuntu/desktop/Ubuntu系统安装搜狗输入法教程.md)
       - [ubuntu 桌面系统 使用 fcitx，导致 ctrl+alt+b快捷键被占用解决方案](./服务器/Ubuntu/desktop/ubuntu%20桌面系统%20使用%20fcitx，导致%20ctrl+alt+b快捷键被占用解决方案.md)
+      - [ubuntu系统修复gnome桌面没有设置](./服务器/Ubuntu/desktop/ubuntu系统修复gnome桌面没有设置.md)
       - [修复ubuntu系统 ssh无法启动问题](./服务器/Ubuntu/desktop/修复ubuntu系统%20ssh无法启动问题.md)
       - [安装Typora](./服务器/Ubuntu/desktop/安装Typora.md)
   - ansible
