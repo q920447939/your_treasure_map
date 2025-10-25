@@ -109,6 +109,8 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [Linux新增普通用户](./服务器/Linux新增普通用户.md)
   - Ubuntu
     - [Ubuntu 使用SSH 密钥对实现免密登录](./服务器/Ubuntu/Ubuntu%20使用SSH%20密钥对实现免密登录.md)
+    - [Ubuntu 切换软件源](./服务器/Ubuntu/Ubuntu%20切换软件源.md)
+    - [Ubuntu 查看 docker run 完整命令](./服务器/Ubuntu/Ubuntu%20查看%20docker%20run%20完整命令.md)
     - [Ubuntu22安装Docker-compose](./服务器/Ubuntu/Ubuntu22安装Docker-compose.md)
     - [Ubuntu22安装docker](./服务器/Ubuntu/Ubuntu22安装docker.md)
     - [Ubuntu22设置swap交换区](./服务器/Ubuntu/Ubuntu22设置swap交换区.md)
