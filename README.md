@@ -11,6 +11,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - IDEA
     - [IDEA2024使用docker教程](./IDE/IDEA/IDEA2024使用docker教程.md)
 - clash
+  - [Ubuntu 配置未匹配流量走 Mihomo 网卡教程](./clash/Ubuntu%20配置未匹配流量走%20Mihomo%20网卡教程.md)
   - [clash-verge-re集合TUN模式实现全局代理,并实现流量转发功能](./clash/clash-verge-re集合TUN模式实现全局代理,并实现流量转发功能.md)
   - [mihome全局代理如何设置指向哪个代理](./clash/mihome全局代理如何设置指向哪个代理.md)
   - [使用mihomo方式启动进行代理](./clash/使用mihomo方式启动进行代理.md)
@@ -83,6 +84,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [Ubuntu系统将wireguard 加入开机自启](./wireguard/Ubuntu系统将wireguard%20加入开机自启.md)
   - [“偷渡”指南：如何让一台电脑通过另一台电脑访问受限网络](./wireguard/“偷渡”指南：如何让一台电脑通过另一台电脑访问受限网络.md)
   - [使用wireguard组网(windows+linux)](./wireguard/使用wireguard组网(windows+linux).md)
+  - [麒麟操作系统安装Wireguard(作为客户端)](./wireguard/麒麟操作系统安装Wireguard(作为客户端).md)
 - 开发工具
   - vscode
     - [vscode软件插件大全](./开发工具/vscode/vscode软件插件大全.md)
@@ -106,6 +108,7 @@ This is a collection of all kinds of software engineering records, you will alwa
   - [Linux创建开启自启服务](./服务器/Linux创建开启自启服务.md)
   - [Linux新增普通用户](./服务器/Linux新增普通用户.md)
   - Ubuntu
+    - [Ubuntu 使用SSH 密钥对实现免密登录](./服务器/Ubuntu/Ubuntu%20使用SSH%20密钥对实现免密登录.md)
     - [Ubuntu22安装Docker-compose](./服务器/Ubuntu/Ubuntu22安装Docker-compose.md)
     - [Ubuntu22安装docker](./服务器/Ubuntu/Ubuntu22安装docker.md)
     - [Ubuntu22设置swap交换区](./服务器/Ubuntu/Ubuntu22设置swap交换区.md)
@@ -123,6 +126,7 @@ This is a collection of all kinds of software engineering records, you will alwa
       - [ubuntu系统修复gnome桌面没有设置](./服务器/Ubuntu/desktop/ubuntu系统修复gnome桌面没有设置.md)
       - [修复ubuntu系统 ssh无法启动问题](./服务器/Ubuntu/desktop/修复ubuntu系统%20ssh无法启动问题.md)
       - [安装Typora](./服务器/Ubuntu/desktop/安装Typora.md)
+      - [禁用搜狗输入法Linux版的简繁切换快捷键](./服务器/Ubuntu/desktop/禁用搜狗输入法Linux版的简繁切换快捷键.md)
   - ansible
     - md
       - [CentOS7-ansible自动化安装服务器初始化脚本](./服务器/ansible/md/CentOS7-ansible自动化安装服务器初始化脚本.md)
