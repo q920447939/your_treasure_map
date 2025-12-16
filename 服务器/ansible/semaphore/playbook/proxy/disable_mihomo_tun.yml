@@ -1,0 +1,98 @@
+---
+# Ubuntu 24 (amd64) 卸载并清理 mihomo（TUN 透明代理）
+# 目标：停止服务、移除二进制/配置/数据/Unit 文件，并清理锁文件，尽量做到无痕。
+
+- name: 卸载并清理 mihomo（TUN 透明代理）
+  hosts: all
+  become: yes
+
+  vars:
+    mihomo_install_dir: "/opt/mihomo"
+    mihomo_service_name: "mihomo"
+    mihomo_lock_file: "/tmp/ansible-mihomo-tun.lock"
+    mihomo_tun_device_name: "Mihomo"
+    mihomo_iproute2_table_index: 8099
+    mihomo_iproute2_rule_index: 18099
+
+  tasks:
+    - name: 停止 mihomo 服务（若不存在则忽略）
+      systemd:
+        name: "{{ mihomo_service_name }}"
+        state: stopped
+      failed_when: false
+
+    - name: 禁用 mihomo 服务（若不存在则忽略）
+      systemd:
+        name: "{{ mihomo_service_name }}"
+        enabled: false
+      failed_when: false
+
+    - name: 删除 systemd unit
+      file:
+        path: "/etc/systemd/system/{{ mihomo_service_name }}.service"
+        state: absent
+
+    - name: 重新加载 systemd
+      systemd:
+        daemon_reload: true
+
+    - name: 找出与 mihomo route table 相关的 IPv4 policy rules
+      shell: "ip -4 rule show | awk -v t='{{ mihomo_iproute2_table_index }}' '$0 ~ (\"lookup \" t) {gsub(\":\",\"\",$1); print $1}'"
+      register: mihomo_rule_prefs4
+      changed_when: false
+      failed_when: false
+
+    - name: 删除 mihomo 相关 IPv4 policy rules（按 pref）
+      command: "ip -4 rule del pref {{ item }}"
+      loop: "{{ mihomo_rule_prefs4.stdout_lines | default([]) }}"
+      failed_when: false
+
+    - name: 清理 mihomo 相关 IPv4 route table
+      command: "ip -4 route flush table {{ mihomo_iproute2_table_index }}"
+      failed_when: false
+
+    - name: 找出与 mihomo route table 相关的 IPv6 policy rules
+      shell: "ip -6 rule show | awk -v t='{{ mihomo_iproute2_table_index }}' '$0 ~ (\"lookup \" t) {gsub(\":\",\"\",$1); print $1}'"
+      register: mihomo_rule_prefs6
+      changed_when: false
+      failed_when: false
+
+    - name: 删除 mihomo 相关 IPv6 policy rules（按 pref）
+      command: "ip -6 rule del pref {{ item }}"
+      loop: "{{ mihomo_rule_prefs6.stdout_lines | default([]) }}"
+      failed_when: false
+
+    - name: 清理 mihomo 相关 IPv6 route table
+      command: "ip -6 route flush table {{ mihomo_iproute2_table_index }}"
+      failed_when: false
+
+    - name: 尝试删除 TUN 网卡（若仍存在）
+      command: "ip link del {{ mihomo_tun_device_name }}"
+      failed_when: false
+
+    - name: 删除安装目录（含二进制/配置/数据）
+      file:
+        path: "{{ mihomo_install_dir }}"
+        state: absent
+
+    - name: 删除锁文件
+      file:
+        path: "{{ mihomo_lock_file }}"
+        state: absent
+
+    - name: 尝试确认 TUN 网卡已消失（若仍存在则提示）
+      command: "ip link show {{ mihomo_tun_device_name }}"
+      register: mihomo_tun_dev_check
+      failed_when: false
+      changed_when: false
+
+    - name: 输出卸载结果提示
+      debug:
+        msg: |
+          mihomo(TUN) 卸载完成：
+          - 已停止并禁用服务 {{ mihomo_service_name }}
+          - 已删除 {{ mihomo_install_dir }} 与 systemd unit
+          - 已删除锁文件 {{ mihomo_lock_file }}
+          {% if mihomo_tun_dev_check.rc == 0 %}
+          ⚠️ 仍检测到网卡 {{ mihomo_tun_device_name }}，请检查是否还有其他 mihomo 进程在运行。
+          {% endif %}
