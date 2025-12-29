@@ -1,0 +1,438 @@
+---
+- name: 安装并启用 mihomo（TUN 透明代理）- 麒麟 V10（x86_64/aarch64）
+  hosts: all
+  become: 'yes'
+
+  vars:
+    # 离线包目录（默认：本 playbook 同级的 mihomo_bundle；也可以 -e 覆盖为其他目录）
+    mihomo_bundle_dir: '{{ playbook_dir }}/mihomo_bundle'
+    mihomo_config_filename: config.yaml
+    mihomo_bundle_optional_files:
+      - Country.mmdb
+      - geoip.dat
+      - geosite.dat
+      - cache.db
+
+    # 安装目录 / 服务名 / 防重复执行锁
+    mihomo_install_dir: /opt/mihomo
+    mihomo_service_name: mihomo
+    mihomo_lock_file: /tmp/ansible-mihomo-tun.lock
+
+    # 配置模式：
+    # - generated_upstream: 仅生成一个上游代理 + PROXY 组 + rules（适合“本机作为二级代理”）
+    # - bundle: 直接使用离线包里的 config.yaml（可选注入默认 tun/dns）
+    mihomo_config_mode: generated_upstream
+
+    # 生成配置（generated_upstream）
+    mihomo_upstream_name: UPSTREAM
+    mihomo_upstream_type: socks5
+    mihomo_upstream_server: ''
+    mihomo_upstream_port: 17893
+    mihomo_upstream_username: ''
+    mihomo_upstream_password: ''
+    mihomo_generated_proxy_group_name: PROXY
+    mihomo_generated_rules:
+      - MATCH,PROXY
+    mihomo_generated_mixed_port: 7890
+    mihomo_generated_allow_lan: true
+    mihomo_generated_mode: rule
+    mihomo_generated_log_level: info
+    mihomo_generated_external_controller: 127.0.0.1:9090
+    mihomo_generated_secret: ''
+
+    # 是否在 bundle / generated_upstream 基础上，注入默认 tun/dns（仅补齐缺失字段；用户配置优先）
+    mihomo_config_inject_defaults: true
+
+    # TUN 参数
+    mihomo_tun_device_name: Mihomo
+
+    # 仅用于卸载/清理（disable playbook 可能会使用）
+    mihomo_iproute2_table_index: 8099
+    mihomo_iproute2_rule_index: 18099
+
+    # 路由排除网段（默认 + 额外）
+    mihomo_route_exclude_address_default:
+      - 127.0.0.0/8
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 169.254.0.0/16
+      - 100.64.0.0/10
+      - 224.0.0.0/4
+      - 240.0.0.0/4
+      - 255.255.255.255/32
+    mihomo_route_exclude_address_extra: []
+
+    # fake-ip 过滤
+    mihomo_dns_fake_ip_filter_default:
+      - +.local
+      - +.lan
+      - +.home.arpa
+      - +.localdomain
+      - localhost
+    mihomo_dns_nameserver_default:
+      - 223.5.5.5
+      - 119.29.29.29
+      - 1.1.1.1
+      - 8.8.8.8
+
+    # 一些机器可能 resolv.conf 没有 nameserver，导致域名解析直接失败（即使 TUN 已启用）
+    mihomo_ensure_resolv_conf_nameserver: true
+    mihomo_resolv_conf_nameservers_default: "{{ mihomo_dns_nameserver_default }}"
+
+    # 架构选择（默认自动识别；也可以手动指定 x86_64 / aarch64）
+    mihomo_target_arch: ''
+    allow_arch_mismatch: false
+
+    # 防误用：默认仅允许麒麟（如需跳过校验，设置为 yes）
+    allow_non_kylin: no
+
+  tasks:
+    - name: 检查 mihomo 锁文件是否存在
+      stat:
+        path: '{{ mihomo_lock_file }}'
+      register: mihomo_lock
+
+    - name: 如果锁文件存在则终止执行
+      fail:
+        msg: >-
+          已检测到锁文件 {{ mihomo_lock_file }}，说明 mihomo(TUN) 已经被创建过。如需重新配置/卸载，请先执行
+          {{ playbook_dir }}/disable_mihomo_tun.yml（或原目录下的 disable_mihomo_tun.yml）。
+      when: mihomo_lock.stat.exists
+
+    - name: 读取 /etc/os-release（用于识别麒麟）
+      slurp:
+        src: /etc/os-release
+      register: os_release
+      changed_when: false
+      failed_when: false
+
+    - name: 解析 /etc/os-release（best-effort）
+      set_fact:
+        os_release_text: "{{ os_release.content | default('') | b64decode }}"
+      when: os_release is defined and os_release.content is defined
+
+    - name: 校验当前系统为麒麟（best-effort）
+      assert:
+        that:
+          - allow_non_kylin | bool or ((os_release_text | default('') | lower | regex_search('(?m)^id\\s*=\\s*\"?kylin\"?\\s*$')) is not none)
+        fail_msg: "检测到系统可能不是 Kylin（/etc/os-release 未匹配到 ID=kylin），如确需继续请设置 allow_non_kylin: yes"
+      when: os_release_text is defined
+
+    - name: 选择目标架构（x86_64 / aarch64）
+      set_fact:
+        selected_arch: "{{ (mihomo_target_arch | trim) if (mihomo_target_arch | trim) != '' else ansible_architecture }}"
+
+    - name: 校验架构参数
+      assert:
+        that:
+          - selected_arch in ['x86_64', 'aarch64']
+        fail_msg: "mihomo_target_arch 仅支持 x86_64 / aarch64，当前为: {{ selected_arch }}"
+
+    - name: 防止架构与机器不一致
+      assert:
+        that:
+          - allow_arch_mismatch | bool or selected_arch == ansible_architecture
+        fail_msg: "selected_arch={{ selected_arch }} 与 ansible_architecture={{ ansible_architecture }} 不一致；如确需忽略请设置 allow_arch_mismatch: yes"
+
+    - name: 规范化 mihomo 架构名（用于离线包文件名）
+      set_fact:
+        mihomo_arch_name: "{{ 'arm64' if selected_arch == 'aarch64' else 'amd64' }}"
+
+    - name: 校验目标机是否支持 TUN（/dev/net/tun）
+      stat:
+        path: /dev/net/tun
+      register: tun_dev
+
+    - name: 如不支持 TUN 则终止执行
+      fail:
+        msg: 未发现 /dev/net/tun，目标机无法启用 TUN 模式（需内核支持并启用 TUN/TAP）。
+      when: not tun_dev.stat.exists
+
+    - name: 校验 ip 命令可用（iproute2）
+      command: ip -V
+      register: ip_check
+      changed_when: false
+      failed_when: ip_check.rc != 0
+
+    - name: 生成离线包二进制候选列表（按优先级）
+      set_fact:
+        mihomo_bin_candidates:
+          - "mihomo-linux-{{ mihomo_arch_name }}"
+          - "mihomo-{{ mihomo_arch_name }}"
+          - "mihomo"
+
+    - name: 初始化 mihomo 二进制选择结果
+      set_fact:
+        mihomo_bundle_mihomo_bin: "{{ mihomo_bundle_mihomo_bin | default('') }}"
+
+    - name: 按优先级挑选离线包二进制（控制机本地文件）
+      set_fact:
+        mihomo_bundle_mihomo_bin: >-
+          {{
+            mihomo_bundle_mihomo_bin
+            if (mihomo_bundle_mihomo_bin | length > 0)
+            else ((lookup('ansible.builtin.fileglob', mihomo_bundle_dir ~ '/' ~ item, wantlist=True) | first) | default('', true))
+          }}
+      loop: "{{ mihomo_bin_candidates }}"
+
+    - name: 如离线包缺失（mihomo 二进制）则终止执行
+      fail:
+        msg: |
+          控制机离线包不完整，请在目录 {{ mihomo_bundle_dir }} 放入 mihomo 二进制，支持以下任一命名：
+          {% for p in mihomo_bin_candidates %}
+          - {{ mihomo_bundle_dir }}/{{ p }}
+          {% endfor %}
+      when: mihomo_bundle_mihomo_bin | length == 0
+
+    - name: 检查控制机离线包（config.yaml 存在，bundle 模式需要）
+      set_fact:
+        mihomo_bundle_cfg_exists: "{{ (lookup('ansible.builtin.fileglob', mihomo_bundle_dir ~ '/' ~ mihomo_config_filename, wantlist=True) | length) > 0 }}"
+
+    - name: 如离线包缺失（bundle 模式 config.yaml）则终止执行
+      fail:
+        msg: |
+          bundle 模式需要离线 config.yaml，请检查目录：
+          - {{ mihomo_bundle_dir }}/{{ mihomo_config_filename }}
+      when:
+        - mihomo_config_mode == "bundle"
+        - not (mihomo_bundle_cfg_exists | bool)
+
+    - name: 校验 generated_upstream 模式参数
+      assert:
+        that:
+          - mihomo_upstream_server | length > 0
+          - mihomo_upstream_port | int > 0
+          - mihomo_upstream_type in ["socks5", "http"]
+        fail_msg: >-
+          generated_upstream 模式需要配置
+          mihomo_upstream_server/mihomo_upstream_port，并且 mihomo_upstream_type
+          只能为 socks5 或 http。
+      when: mihomo_config_mode == "generated_upstream"
+
+    - name: 创建目标机安装目录
+      file:
+        path: '{{ mihomo_install_dir }}'
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: 复制 mihomo 二进制到目标机
+      copy:
+        src: '{{ mihomo_bundle_mihomo_bin }}'
+        dest: '{{ mihomo_install_dir }}/mihomo'
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: 计算控制机存在的可选数据文件列表
+      set_fact:
+        mihomo_optional_bundle_present: >-
+          {{
+            (mihomo_optional_bundle_present | default([]))
+            + ([item] if (lookup('ansible.builtin.fileglob', mihomo_bundle_dir ~ '/' ~ item, wantlist=True) | length > 0) else [])
+          }}
+      loop: '{{ mihomo_bundle_optional_files }}'
+
+    - name: 复制可选数据文件到目标机（控制机存在则复制）
+      copy:
+        src: '{{ mihomo_bundle_dir }}/{{ item }}'
+        dest: '{{ mihomo_install_dir }}/{{ item }}'
+        owner: root
+        group: root
+        mode: '0644'
+      loop: '{{ mihomo_optional_bundle_present | default([]) }}'
+
+    - name: 读取控制机 config.yaml（用于注入默认配置）
+      set_fact:
+        mihomo_cfg_raw: '{{ lookup(''file'', mihomo_bundle_dir ~ ''/'' ~ mihomo_config_filename) }}'
+      when:
+        - mihomo_config_mode == "bundle"
+        - mihomo_config_inject_defaults | bool
+
+    - name: 解析控制机 config.yaml 为 YAML（用于注入默认配置）
+      set_fact:
+        mihomo_cfg_obj: '{{ mihomo_cfg_raw | from_yaml }}'
+      when:
+        - mihomo_config_mode == "bundle"
+        - mihomo_config_inject_defaults | bool
+
+    - name: 生成最小可用配置（generated_upstream 模式） - 第一步：定义基础代理
+      set_fact:
+        mihomo_upstream_proxy_base:
+          name: '{{ mihomo_upstream_name }}'
+          type: '{{ mihomo_upstream_type }}'
+          server: '{{ mihomo_upstream_server }}'
+          port: '{{ mihomo_upstream_port | int }}'
+      when: mihomo_config_mode == "generated_upstream"
+
+    - name: 生成最小可用配置（generated_upstream 模式） - 第二步：扩展代理配置
+      set_fact:
+        mihomo_upstream_proxy: >-
+          {{
+            mihomo_upstream_proxy_base
+            | combine({'udp': true} if mihomo_upstream_type == 'socks5' else {})
+            | combine({'username': mihomo_upstream_username} if (mihomo_upstream_username | length > 0) else {})
+            | combine({'password': mihomo_upstream_password} if (mihomo_upstream_password | length > 0) else {})
+          }}
+      when: mihomo_config_mode == "generated_upstream"
+
+    - name: 生成最小可用配置（generated_upstream 模式） - 第三步：生成基础配置对象
+      set_fact:
+        mihomo_cfg_obj: >-
+          {{
+            {
+              'mixed-port': (mihomo_generated_mixed_port | int),
+              'allow-lan': (mihomo_generated_allow_lan | bool),
+              'mode': mihomo_generated_mode,
+              'log-level': mihomo_generated_log_level,
+              'external-controller': mihomo_generated_external_controller,
+              'secret': mihomo_generated_secret,
+              'proxies': [mihomo_upstream_proxy],
+              'proxy-groups': [
+                {
+                  'name': mihomo_generated_proxy_group_name,
+                  'type': 'select',
+                  'proxies': [mihomo_upstream_name]
+                }
+              ],
+              'rules': mihomo_generated_rules
+            }
+          }}
+      when: mihomo_config_mode == "generated_upstream"
+
+    - name: 写入目标机 config.yaml（generated_upstream 原始版）
+      copy:
+        content: '{{ mihomo_cfg_obj | to_nice_yaml(indent=2, sort_keys=false) }}'
+        dest: '{{ mihomo_install_dir }}/config.yaml'
+        owner: root
+        group: root
+        mode: '0644'
+      when:
+        - mihomo_config_mode == "generated_upstream"
+        - not (mihomo_config_inject_defaults | bool)
+
+    - name: 生成默认 tun/dns 配置（仅在缺失时补齐）
+      set_fact:
+        mihomo_cfg_defaults:
+          tun:
+            enable: true
+            device: '{{ mihomo_tun_device_name }}'
+            stack: gvisor
+            auto-route: true
+            strict-route: true
+            auto-detect-interface: true
+            dns-hijack:
+              - any:53
+            route-exclude-address: >-
+              {{ (mihomo_route_exclude_address_default +
+              mihomo_route_exclude_address_extra) | unique }}
+          dns:
+            enable: true
+            enhanced-mode: fake-ip
+            fake-ip-filter: '{{ mihomo_dns_fake_ip_filter_default }}'
+            nameserver: "{{ mihomo_dns_nameserver_default }}"
+      when: mihomo_config_inject_defaults | bool
+
+    - name: 合并默认配置（保留用户原配置优先级）
+      set_fact:
+        mihomo_cfg_merged: '{{ mihomo_cfg_defaults | combine(mihomo_cfg_obj, recursive=True) }}'
+      when: mihomo_config_inject_defaults | bool
+
+    - name: 写入目标机 config.yaml（注入默认配置版）
+      copy:
+        content: '{{ mihomo_cfg_merged | to_nice_yaml(indent=2, sort_keys=false) }}'
+        dest: '{{ mihomo_install_dir }}/config.yaml'
+        owner: root
+        group: root
+        mode: '0644'
+      when: mihomo_config_inject_defaults | bool
+
+    - name: 写入目标机 config.yaml（原样复制版）
+      copy:
+        src: '{{ mihomo_bundle_dir }}/{{ mihomo_config_filename }}'
+        dest: '{{ mihomo_install_dir }}/config.yaml'
+        owner: root
+        group: root
+        mode: '0644'
+      when:
+        - mihomo_config_mode == "bundle"
+        - not (mihomo_config_inject_defaults | bool)
+
+    - name: 检测 /etc/resolv.conf 是否包含 nameserver（兼容旧版 Ansible/Jinja）
+      shell: "grep -Eqs '^[[:space:]]*nameserver[[:space:]]+[^[:space:]]+' /etc/resolv.conf"
+      register: resolv_ns_grep
+      changed_when: false
+      failed_when: false
+
+    - name: 记录 /etc/resolv.conf 是否包含 nameserver
+      set_fact:
+        resolv_has_nameserver: "{{ resolv_ns_grep.rc == 0 }}"
+      when: resolv_ns_grep is defined and resolv_ns_grep.rc is defined
+
+    - name: 如 /etc/resolv.conf 缺少 nameserver 则补齐（避免域名解析失败）
+      lineinfile:
+        path: /etc/resolv.conf
+        line: "nameserver {{ item }}"
+        create: true
+        insertafter: EOF
+        state: present
+      loop: "{{ mihomo_resolv_conf_nameservers_default }}"
+      when:
+        - mihomo_ensure_resolv_conf_nameserver | bool
+        - resolv_has_nameserver is defined
+        - not (resolv_has_nameserver | bool)
+
+    - name: 安装 systemd unit
+      copy:
+        dest: /etc/systemd/system/{{ mihomo_service_name }}.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=mihomo (TUN transparent proxy)
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=simple
+          WorkingDirectory={{ mihomo_install_dir }}
+          ExecStart={{ mihomo_install_dir }}/mihomo -d {{ mihomo_install_dir }} -f ./config.yaml
+          Restart=on-failure
+          RestartSec=2
+          LimitNOFILE=1048576
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: 启用并启动 mihomo 服务
+      systemd:
+        name: '{{ mihomo_service_name }}'
+        enabled: true
+        state: restarted
+        daemon_reload: true
+
+    - name: 等待 mihomo TUN 网卡出现（可选检查）
+      command: ip link show {{ mihomo_tun_device_name }}
+      register: mihomo_tun_dev_check
+      retries: 10
+      delay: 1
+      until: mihomo_tun_dev_check.rc == 0
+
+    - name: 创建锁文件（防重复执行）
+      copy:
+        dest: '{{ mihomo_lock_file }}'
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          mihomo(TUN) installed at {{ ansible_date_time.iso8601 }}
+          install_dir={{ mihomo_install_dir }}
+          service={{ mihomo_service_name }}
+          config_mode={{ mihomo_config_mode }}
+          config_inject_defaults={{ mihomo_config_inject_defaults }}
+          arch={{ selected_arch }}
+          iproute2_table_index={{ mihomo_iproute2_table_index }}
+          iproute2_rule_index={{ mihomo_iproute2_rule_index }}
