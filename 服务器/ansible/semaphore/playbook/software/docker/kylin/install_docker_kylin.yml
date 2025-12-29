@@ -1,0 +1,496 @@
+---
+- name: Install Docker on Kylin Linux Advanced Server V10
+  hosts: all
+  become: yes
+  vars:
+    # Docker版本（RPM场景下通常仅做展示；实际安装依赖仓库可用版本）
+    docker_version: "27.0"
+
+    # Docker Compose版本（仅在 download 模式生效）
+    docker_compose_version: "2.33.0"
+
+    # 是否开机自启
+    docker_start_on_boot: yes
+
+    # 是否清除Docker数据目录
+    clean_docker_data: no
+
+    # Docker存储路径配置
+    docker_storage_path: ""
+
+    # 是否卸载 Podman（默认卸载，避免与 Docker 使用习惯冲突）
+    remove_podman: yes
+    podman_remove_packages:
+      - podman
+      - podman-docker
+      - podman-compose
+      - buildah
+      - skopeo
+
+    # Docker配置选项
+    docker_log_driver: "json-file"
+    docker_log_max_size: "10m"
+    docker_log_max_file: "3"
+    docker_insecure_registries: []
+    docker_registry_mirrors: ["https://docker.1panel.live"]
+    docker_dns: []
+    docker_experimental: false
+
+    # 用户配置
+    docker_users: []
+
+    # 架构选择（默认自动识别：x86_64 / aarch64；也可以手动指定）
+    docker_target_arch: ""
+    allow_arch_mismatch: false
+
+    # Docker Compose安装方式：
+    # - auto: 优先本地文件 -> compose plugin -> GitHub下载
+    # - local: 强制使用 playbook 目录内的 docker-compose-linux-<arch>
+    # - plugin: 使用 docker-compose-plugin，并创建 /usr/local/bin/docker-compose 兼容入口
+    # - download: 从 GitHub 下载 docker-compose 二进制
+    docker_compose_install: "auto"
+    check_local_compose: yes
+
+    # Docker CE官方仓库（如目标环境不允许外网，请改为内网镜像，或设置 docker_use_official_repo: no 使用系统仓库）
+    docker_use_official_repo: yes
+    docker_gpg_key_url: "https://download.docker.com/linux/centos/gpg"
+
+    # Docker CE RPM 源选择：
+    # 麒麟 V10 上 $releasever 往往会被识别为 10，导致拉取 el10 包（通常要求 glibc >= 2.34）而安装失败。
+    # 默认固定使用 CentOS 8 的仓库路径（更可能兼容 glibc 2.28 系列）。
+    docker_ce_repo_major: "8"   # 可选：8/9/10（按实际系统依赖决定）
+    docker_ce_channel: "stable"
+    docker_ce_baseurl: "https://download.docker.com/linux/centos/{{ docker_ce_repo_major }}/$basearch/{{ docker_ce_channel }}"
+    docker_ce_baseurl_debug: "https://download.docker.com/linux/centos/{{ docker_ce_repo_major }}/debug-$basearch/{{ docker_ce_channel }}"
+    docker_ce_baseurl_source: "https://download.docker.com/linux/centos/{{ docker_ce_repo_major }}/source/{{ docker_ce_channel }}"
+
+    # dnf 安装参数（用于解决与系统 runc/containerd 的冲突；yum 不支持则自动忽略）
+    docker_dnf_allowerasing: yes
+    docker_dnf_nobest: yes
+    docker_dnf_skip_broken: no
+
+    # 重要：在部分麒麟/类RHEL系统上，Ansible 的 package/dnf/yum 模块可能会尝试使用系统 Python（如 3.7）
+    # 从而触发 “ansible-core requires a minimum of Python version 3.8”。默认用 raw 调用 dnf/yum 命令规避。
+    use_raw_package_ops: yes
+
+    # 时间戳（用于备份文件）
+    timestamp: "{{ ansible_date_time.date }}_{{ ansible_date_time.time | regex_replace(':', '') }}"
+
+    # 防误用：默认仅允许在麒麟系统执行（如需跳过校验，设置为 yes）
+    allow_non_kylin: no
+
+  tasks:
+    - name: 显示安装信息
+      debug:
+        msg: "准备安装 Docker {{ docker_version }} (Kylin V10) 与 Docker Compose ({{ docker_compose_install }})"
+
+    - name: 读取 /etc/os-release
+      slurp:
+        src: /etc/os-release
+      register: os_release
+      changed_when: false
+      failed_when: false
+
+    - name: 解析 /etc/os-release（best-effort）
+      set_fact:
+        os_release_text: "{{ os_release.content | default('') | b64decode }}"
+      when: os_release is defined and os_release.content is defined
+
+    - name: 校验当前系统为麒麟（best-effort）
+      assert:
+        that:
+          - allow_non_kylin | bool or ((os_release_text | default('') | lower | regex_search('(?m)^id\\s*=\\s*\"?kylin\"?\\s*$')) is not none)
+        fail_msg: "检测到系统可能不是 Kylin（/etc/os-release 未匹配到 ID=kylin），如确需继续请设置 allow_non_kylin: yes"
+      when: os_release_text is defined
+
+    - name: 显示系统信息
+      debug:
+        msg:
+          - "Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Kernel: {{ ansible_kernel }}"
+          - "Arch: {{ ansible_architecture }}"
+
+    - name: 选择目标架构
+      set_fact:
+        selected_arch: "{{ (docker_target_arch | trim) if (docker_target_arch | trim) != '' else ansible_architecture }}"
+
+    - name: 校验架构参数
+      assert:
+        that:
+          - selected_arch in ['x86_64', 'aarch64']
+        fail_msg: "docker_target_arch 仅支持 x86_64 / aarch64，当前为: {{ selected_arch }}"
+
+    - name: 防止架构与机器不一致
+      assert:
+        that:
+          - allow_arch_mismatch | bool or selected_arch == ansible_architecture
+        fail_msg: "selected_arch={{ selected_arch }} 与 ansible_architecture={{ ansible_architecture }} 不一致；如确需忽略请设置 allow_arch_mismatch: yes"
+
+    - name: 规范化 Docker Compose 架构名称
+      set_fact:
+        docker_compose_arch: "{{ 'aarch64' if selected_arch == 'aarch64' else 'x86_64' }}"
+
+    - name: 检查是否已安装Docker
+      command: which docker
+      register: docker_exists
+      changed_when: false
+      failed_when: false
+
+    - name: 检查是否已安装Podman
+      command: which podman
+      register: podman_exists
+      changed_when: false
+      failed_when: false
+
+    - name: 停止/禁用 Podman 相关服务（best-effort）
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - podman
+        - podman.socket
+      ignore_errors: yes
+      when: remove_podman | bool and podman_exists.rc == 0
+
+    - name: 卸载 Podman 相关软件包（raw，best-effort）
+      raw: "{{ ansible_facts.pkg_mgr }} -y remove {{ podman_remove_packages | join(' ') }} || true"
+      register: podman_remove_raw
+      changed_when: >
+        ((podman_remove_raw.stdout | default('') ~ podman_remove_raw.stderr | default('')) | regex_search('(?i)(No Packages marked for removal|Nothing to do)')) is none
+      failed_when: false
+      when: remove_podman | bool and podman_exists.rc == 0 and (use_raw_package_ops | bool)
+
+    - name: 卸载 Podman 相关软件包（Ansible package，best-effort）
+      package:
+        name: "{{ podman_remove_packages }}"
+        state: absent
+      failed_when: false
+      when: remove_podman | bool and podman_exists.rc == 0 and not (use_raw_package_ops | bool)
+
+    - name: 停止Docker相关服务
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - docker
+        - containerd
+      ignore_errors: yes
+      when: docker_exists.rc == 0
+
+    - name: 卸载旧版本Docker（如存在）
+      raw: >
+        {{ ansible_facts.pkg_mgr }} -y remove
+        docker docker-engine docker.io docker-ce docker-ce-cli
+        containerd containerd.io runc
+        docker-buildx-plugin docker-compose-plugin
+        || true
+      register: docker_remove_raw
+      changed_when: >
+        ((docker_remove_raw.stdout | default('') ~ docker_remove_raw.stderr | default('')) | regex_search('(?i)(No Packages marked for removal|Nothing to do)')) is none
+      failed_when: false
+      when: docker_exists.rc == 0 and (use_raw_package_ops | bool)
+
+    - name: 卸载旧版本Docker（如存在，Ansible package）
+      package:
+        name:
+          - docker
+          - docker-engine
+          - docker.io
+          - docker-ce
+          - docker-ce-cli
+          - containerd
+          - containerd.io
+          - runc
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: absent
+      ignore_errors: yes
+      when: docker_exists.rc == 0 and not (use_raw_package_ops | bool)
+
+    - name: 删除Docker配置文件
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/docker/daemon.json
+        - /etc/docker
+      ignore_errors: yes
+
+    - name: 检查默认Docker数据目录是否存在
+      stat:
+        path: /var/lib/docker
+      register: docker_data_dir
+      when: clean_docker_data | bool
+
+    - name: 警告即将删除Docker数据目录
+      debug:
+        msg: |
+          警告: 即将删除Docker数据目录 /var/lib/docker
+          这将删除所有Docker镜像、容器和卷数据！
+          如果不希望删除数据，请按Ctrl+C终止操作。
+      when: clean_docker_data | bool and docker_data_dir.stat.exists
+
+    - name: 暂停5秒以便确认
+      pause:
+        seconds: 5
+      when: clean_docker_data | bool and docker_data_dir.stat.exists
+
+    - name: 删除Docker数据目录
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/docker
+        - /var/lib/containerd
+      when: clean_docker_data | bool and docker_data_dir.stat.exists
+
+    - name: 刷新软件仓库缓存（best-effort）
+      command: "{{ ansible_facts.pkg_mgr }} makecache"
+      changed_when: false
+      failed_when: false
+
+    - name: 安装基础依赖
+      raw: "{{ ansible_facts.pkg_mgr }} -y install ca-certificates curl gnupg2"
+      register: base_deps_raw
+      changed_when: >
+        ((base_deps_raw.stdout | default('') ~ base_deps_raw.stderr | default('')) | regex_search('(?i)Nothing to do')) is none
+      when: use_raw_package_ops | bool
+
+    - name: 安装基础依赖（Ansible package）
+      package:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg2
+        state: present
+      when: not (use_raw_package_ops | bool)
+
+    - name: 安装仓库管理依赖（dnf）
+      raw: "dnf -y install dnf-plugins-core"
+      register: dnf_plugins_raw
+      changed_when: >
+        ((dnf_plugins_raw.stdout | default('') ~ dnf_plugins_raw.stderr | default('')) | regex_search('(?i)Nothing to do')) is none
+      when: ansible_facts.pkg_mgr == 'dnf'
+      failed_when: false
+
+    - name: 安装仓库管理依赖（yum）
+      raw: "yum -y install yum-utils"
+      register: yum_utils_raw
+      changed_when: >
+        ((yum_utils_raw.stdout | default('') ~ yum_utils_raw.stderr | default('')) | regex_search('(?i)Nothing to do')) is none
+      when: ansible_facts.pkg_mgr == 'yum'
+      failed_when: false
+
+    - name: 读取 glibc 版本（best-effort）
+      raw: "rpm -q glibc --qf '%{VERSION}\\n'"
+      register: glibc_version
+      changed_when: false
+      failed_when: false
+
+    - name: 显示 glibc 版本（best-effort）
+      debug:
+        msg: "Detected glibc: {{ glibc_version.stdout | default('unknown') | trim }}"
+      when: glibc_version is defined
+
+    - name: 提示 docker-ce 仓库版本可能不匹配（best-effort）
+      debug:
+        msg: >
+          当前 glibc={{ glibc_version.stdout | default('unknown') | trim }}，
+          docker_ce_repo_major={{ docker_ce_repo_major }}。
+          如果安装提示缺少 GLIBC_2.34，则建议将 docker_ce_repo_major 设为 8。
+      when: glibc_version is defined and (glibc_version.stdout | default('') | trim) != ''
+
+    - name: 添加Docker官方GPG密钥
+      raw: "curl -fsSL {{ docker_gpg_key_url }} -o /etc/pki/rpm-gpg/RPM-GPG-KEY-Docker && rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-Docker"
+      when: docker_use_official_repo | bool
+      failed_when: false
+
+    - name: 添加Docker官方仓库（固定 baseurl，避免 $releasever 误判）
+      template:
+        src: docker-ce.repo.j2
+        dest: /etc/yum.repos.d/docker-ce.repo
+        mode: "0644"
+      when: docker_use_official_repo | bool
+
+    - name: 安装Docker Engine（docker-ce）
+      raw: >-
+        {{ ansible_facts.pkg_mgr }} -y
+        {% if ansible_facts.pkg_mgr == 'dnf' and (docker_dnf_allowerasing | bool) %} --allowerasing{% endif %}
+        {% if ansible_facts.pkg_mgr == 'dnf' and (docker_dnf_nobest | bool) %} --nobest{% endif %}
+        {% if ansible_facts.pkg_mgr == 'dnf' and (docker_dnf_skip_broken | bool) %} --skip-broken{% endif %}
+        install docker-ce docker-ce-cli containerd.io
+      register: docker_install_raw
+      changed_when: >
+        ((docker_install_raw.stdout | default('') ~ docker_install_raw.stderr | default('')) | regex_search('(?i)Nothing to do')) is none
+      when: use_raw_package_ops | bool
+
+    - name: 安装Docker Engine（docker-ce，Ansible package）
+      package:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+      register: docker_install_pkg
+      when: not (use_raw_package_ops | bool)
+
+    - name: 尝试安装 buildx / compose 插件（best-effort）
+      raw: "{{ ansible_facts.pkg_mgr }} -y install docker-buildx-plugin docker-compose-plugin || true"
+      register: docker_plugins_raw
+      changed_when: >
+        ((docker_plugins_raw.stdout | default('') ~ docker_plugins_raw.stderr | default('')) | regex_search('(?i)Nothing to do')) is none
+      failed_when: false
+      when: use_raw_package_ops | bool
+
+    - name: 尝试安装 buildx / compose 插件（Ansible package，best-effort）
+      package:
+        name:
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+      failed_when: false
+      when: not (use_raw_package_ops | bool)
+
+    - name: 检查 compose plugin 是否可用（best-effort）
+      command: docker compose version
+      register: compose_plugin_version
+      changed_when: false
+      failed_when: false
+
+    - name: 记录 compose plugin 可用性
+      set_fact:
+        compose_plugin_available: "{{ compose_plugin_version.rc == 0 }}"
+
+    - name: 设置Docker开机自启并启动
+      systemd:
+        name: docker
+        enabled: "{{ docker_start_on_boot }}"
+        state: started
+      register: docker_service
+
+    - name: 设置Docker存储路径
+      set_fact:
+        actual_docker_path: "{{ docker_storage_path }}"
+      when: docker_storage_path | trim != ""
+
+    - name: 创建Docker存储目录
+      file:
+        path: "{{ actual_docker_path }}"
+        state: directory
+        mode: "0711"
+      when: actual_docker_path is defined
+
+    - name: 创建Docker配置目录
+      file:
+        path: /etc/docker
+        state: directory
+        mode: "0755"
+
+    - name: 配置Docker daemon.json
+      template:
+        src: daemon.json.j2
+        dest: /etc/docker/daemon.json
+        mode: "0644"
+      register: docker_config
+      notify: restart docker
+
+    - name: 安装 Docker Compose（二进制：尝试本地复制）
+      copy:
+        src: "docker-compose-linux-{{ docker_compose_arch }}"
+        dest: /usr/local/bin/docker-compose
+        mode: "0755"
+      register: compose_copy_local_attempt
+      ignore_errors: yes
+      when: docker_compose_install in ['auto', 'local'] and (check_local_compose | bool)
+
+    - name: 记录本地 Docker Compose 安装结果
+      set_fact:
+        compose_local_ok: "{{ (compose_copy_local_attempt is defined) and not (compose_copy_local_attempt.skipped | default(false)) and not (compose_copy_local_attempt.failed | default(false)) }}"
+
+    - name: 本地 Docker Compose 文件缺失时直接失败（local 模式）
+      assert:
+        that:
+          - compose_local_ok | bool
+        fail_msg: "local 模式要求在 playbook 目录内提供 docker-compose-linux-{{ docker_compose_arch }}"
+      when: docker_compose_install == 'local'
+
+    - name: 安装 Docker Compose（compose plugin：兼容 docker-compose 入口）
+      copy:
+        dest: /usr/local/bin/docker-compose
+        mode: "0755"
+        content: |
+          #!/usr/bin/env sh
+          exec docker compose "$@"
+      when: compose_plugin_available | bool and (docker_compose_install == 'plugin' or (docker_compose_install == 'auto' and not (compose_local_ok | bool)))
+
+    - name: compose plugin 不可用时直接失败（plugin 模式）
+      assert:
+        that:
+          - compose_plugin_available | bool
+        fail_msg: "plugin 模式需要 docker compose 可用（建议启用 docker_use_official_repo 或确保 docker-compose-plugin 可安装）"
+      when: docker_compose_install == 'plugin'
+
+    - name: 安装 Docker Compose（二进制：GitHub下载）
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-{{ docker_compose_arch }}"
+        dest: /usr/local/bin/docker-compose
+        mode: "0755"
+      when: docker_compose_install == 'download' or (docker_compose_install == 'auto' and not (compose_local_ok | bool) and not (compose_plugin_available | bool))
+      failed_when: docker_compose_install == 'download'
+
+    - name: 添加用户到docker组
+      user:
+        name: "{{ item }}"
+        groups: docker
+        append: yes
+      loop: "{{ docker_users }}"
+      when: docker_users | length > 0
+
+    - name: 验证Docker安装
+      command: docker --version
+      register: docker_version_output
+      changed_when: false
+
+    - name: 验证Docker Compose安装
+      command: /usr/local/bin/docker-compose --version
+      register: compose_version_output
+      changed_when: false
+      failed_when: false
+
+    - name: 显示版本信息
+      debug:
+        msg:
+          - "{{ docker_version_output.stdout }}"
+          - "{{ compose_version_output.stdout if compose_version_output.stdout else 'docker-compose 未检测到（可改用 docker compose version 或调整 docker_compose_install）' }}"
+
+    - name: 强制执行handlers
+      meta: flush_handlers
+
+    - name: 确保 Docker 开机自启并已启动
+      systemd:
+        name: docker
+        enabled: "{{ docker_start_on_boot }}"
+        state: started
+
+    - name: 显示Docker安装完成信息
+      debug:
+        msg: |
+          ===== Docker 安装完成 =====
+
+          Docker: {{ docker_version_output.stdout }}
+          Docker Compose: {{ compose_version_output.stdout if compose_version_output.stdout else '未安装/未检测到' }}
+
+          配置信息:
+          - 存储路径: {{ actual_docker_path | default('/var/lib/docker') }}
+          - 配置文件: /etc/docker/daemon.json
+
+          常用命令:
+          - 查看Docker信息: docker info
+          - Compose(v2): docker compose version
+          - Compose(兼容): docker-compose --version
+
+  handlers:
+    - name: restart docker
+      shell: systemctl daemon-reload && systemctl restart docker
+      become: yes

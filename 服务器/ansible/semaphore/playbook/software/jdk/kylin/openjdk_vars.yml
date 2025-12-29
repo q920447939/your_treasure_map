@@ -1,0 +1,76 @@
+---
+# Kylin Linux Advanced Server (V10) - OpenJDK 21 安装变量配置
+
+# OpenJDK版本
+openjdk_version: "21"
+
+# 安装方式: 'package' 使用系统包管理器安装, 'manual' 手动安装(推荐：离线/可控)
+install_method: "manual"
+
+# 目标架构: auto | x86_64 | aarch64
+# - auto: 根据目标机架构自动选择
+# - x86_64/aarch64: 显式指定（用户可自由选择）
+jdk_arch: "auto"
+
+# 当install_method为'package'时的配置（不同环境软件源可能不同，可按需调整）
+package_install:
+  packages:
+    - java-21-openjdk
+    - java-21-openjdk-devel
+
+# 当install_method为'manual'时的配置
+manual_install:
+  # 安装目录
+  install_dir: "/opt/java"
+  # 解压后的目录名（解压后应为 {{ install_dir }}/{{ extracted_dirname }}）
+  extracted_dirname: "jdk-21"
+
+  # 安装包来源:
+  # - url: 目标机可联网时使用 get_url 下载
+  # - local: 从控制机(执行ansible-playbook的机器)拷贝到目标机
+  source: "url"
+
+  # URL下载（按架构区分；如需使用其他发行版/镜像，可覆盖此处）
+  download_urls:
+    x86_64: "https://download.java.net/java/GA/jdk21/fd2272bbf8e04c3dbaee13770090416c/35/GPL/openjdk-21_linux-x64_bin.tar.gz"
+    aarch64: "https://download.java.net/java/GA/jdk21/fd2272bbf8e04c3dbaee13770090416c/35/GPL/openjdk-21_linux-aarch64_bin.tar.gz"
+
+  # local拷贝（相对于该目录的路径，建议把安装包放到 kylin/files/ 下）
+  # 例如：
+  #   kylin/files/openjdk-21_linux-x64_bin.tar.gz
+  #   kylin/files/openjdk-21_linux-aarch64_bin.tar.gz
+  local_archives:
+    x86_64: "files/openjdk-21_linux-x64_bin.tar.gz"
+    aarch64: "files/openjdk-21_linux-aarch64_bin.tar.gz"
+
+# 是否设置为系统默认Java
+set_as_default: true
+
+# 是否配置环境变量
+configure_environment: true
+
+# 是否删除系统自带 JDK（例如系统预装的 1.8）
+# 默认不删除：避免影响依赖系统 Java 的组件/脚本。
+# 如需删除，请同时配置 remove_system_jdk_confirm 与 remove_system_jdk_packages（或启用自动探测）。
+remove_system_jdk: false
+
+# 安全确认：只有当 remove_system_jdk_confirm == "yes" 时才会执行删除
+remove_system_jdk_confirm: "no"
+
+# 显式指定要删除的系统 JDK 包名（推荐；优先级最高）
+# 例：
+# remove_system_jdk_packages:
+#   - java-1.8.0-openjdk
+#   - java-1.8.0-openjdk-devel
+remove_system_jdk_packages: []
+
+# 是否自动探测并删除匹配到的 JDK 1.8 相关包（谨慎开启）
+remove_system_jdk_auto_detect: false
+
+# 环境变量配置文件
+environment_file: "/etc/profile.d/java.sh"
+
+# 防火墙配置（麒麟一般使用 firewalld；若未启用/未安装，将自动跳过）
+firewall:
+  configure: false
+  ports: []
