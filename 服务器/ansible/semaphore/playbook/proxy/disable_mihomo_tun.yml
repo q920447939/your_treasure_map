@@ -1,5 +1,5 @@
 ---
-# Ubuntu 24 (amd64) 卸载并清理 mihomo（TUN 透明代理）
+# Ubuntu 24 (amd64) / 银河麒麟 V10 SP3 (x86_64) 卸载并清理 mihomo（TUN 透明代理）
 # 目标：停止服务、移除二进制/配置/数据/Unit 文件，并清理锁文件，尽量做到无痕。
 
 - name: 卸载并清理 mihomo（TUN 透明代理）
@@ -85,7 +85,11 @@
       register: mihomo_tun_dev_check
       failed_when: false
       changed_when: false
-
+    - name: 重启 Docker 服务
+      systemd:
+        name: docker
+        state: restarted
+      ignore_errors: yes
     - name: 输出卸载结果提示
       debug:
         msg: |
@@ -93,6 +97,7 @@
           - 已停止并禁用服务 {{ mihomo_service_name }}
           - 已删除 {{ mihomo_install_dir }} 与 systemd unit
           - 已删除锁文件 {{ mihomo_lock_file }}
+          - 已重启docker
           {% if mihomo_tun_dev_check.rc == 0 %}
           ⚠️ 仍检测到网卡 {{ mihomo_tun_device_name }}，请检查是否还有其他 mihomo 进程在运行。
           {% endif %}

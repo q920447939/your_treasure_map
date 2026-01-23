@@ -33,6 +33,10 @@
     mihomo_tun_device_name: Mihomo
     mihomo_iproute2_table_index: 8099
     mihomo_iproute2_rule_index: 18099
+    mihomo_supported_os_patterns:
+      - "(?i)ubuntu.*\\b24(\\.04)?\\b"
+      - "(?i)kylin.*\\bv?10\\b.*sp3"
+      - "(?i)kylin.*\\bv?10\\b.*(lance|v2207)"
     mihomo_route_exclude_address_default:
       - 127.0.0.0/8
       - 10.0.0.0/8
@@ -61,14 +65,30 @@
           已检测到锁文件 {{ mihomo_lock_file }}，说明 mihomo(TUN) 已经被创建过。如需重新配置/卸载，请先执行
           disable_mihomo_tun.yml。
       when: mihomo_lock.stat.exists
-    - name: 校验目标机系统版本（仅支持 Ubuntu 24）
+    - name: 预处理系统信息
+      set_fact:
+        mihomo_dist_lower: "{{ ansible_distribution | lower }}"
+        mihomo_version_lower: "{{ ansible_distribution_version | lower }}"
+        mihomo_release_lower: "{{ ansible_distribution_release | default('') | lower }}"
+        mihomo_kernel_lower: "{{ ansible_kernel | default('') | lower }}"
+        mihomo_os_fingerprint: >-
+          {{ ansible_distribution }} {{ ansible_distribution_version }}
+          release={{ ansible_distribution_release | default('') }}
+          kernel={{ ansible_kernel | default('') }}
+    - name: 校验目标机系统版本（仅支持 Ubuntu 24 LTS / 银河麒麟 V10 SP3 x86_64）
       assert:
         that:
-          - ansible_distribution == "Ubuntu"
-          - ansible_distribution_major_version | int == 24
+          - ansible_architecture in ["x86_64", "amd64"]
+          - ansible_service_mgr == "systemd"
+          - >-
+            (mihomo_supported_os_patterns
+            | select('search', mihomo_os_fingerprint)
+            | list | length) > 0
         fail_msg: >-
-          当前目标机为 {{ ansible_distribution }} {{ ansible_distribution_version }}，该
-          playbook 仅支持 Ubuntu 24 LTS。
+          当前目标机为 {{ ansible_distribution }} {{ ansible_distribution_version }}
+          (release={{ ansible_distribution_release | default('') }}, kernel={{ ansible_kernel | default('') }},
+          arch={{ ansible_architecture }}, service_mgr={{ ansible_service_mgr }})，该 playbook 仅支持 Ubuntu 24 LTS 或
+          银河麒麟 V10 x86_64（systemd，命中 mihomo_supported_os_patterns 即视为支持）。
     - name: 校验目标机是否支持 TUN（/dev/net/tun）
       stat:
         path: /dev/net/tun
