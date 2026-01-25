@@ -1,0 +1,470 @@
+---
+- name: Offline install Docker on Kylin V10 SP3 (aarch64)
+  hosts: all
+  become: yes
+
+  vars:
+    # Docker 版本（仅展示，实际安装以离线 RPM 为准）
+    docker_version: "27.0"
+
+    # 是否开机自启
+    docker_start_on_boot: yes
+
+    # 是否清除 Docker 数据目录
+    clean_docker_data: no
+
+    # Docker 存储路径配置（空表示默认 /var/lib/docker）
+    docker_storage_path: ""
+
+    # 是否卸载 Podman（默认卸载）
+    remove_podman: yes
+    podman_remove_packages:
+      - podman
+      - podman-docker
+      - podman-compose
+      - buildah
+      - skopeo
+
+    # Docker 配置选项
+    docker_log_driver: "json-file"
+    docker_log_max_size: "10m"
+    docker_log_max_file: "3"
+    docker_insecure_registries: []
+    docker_registry_mirrors: []
+    docker_dns: []
+    docker_experimental: false
+
+    # 用户配置
+    docker_users: []
+
+    # 架构选择（本任务仅支持 aarch64）
+    docker_target_arch: "aarch64"
+    allow_arch_mismatch: false
+
+    # 防误用：默认仅允许 Kylin（如需跳过校验，设置为 yes）
+    allow_non_kylin: no
+    # 仅提示 SP3（不强制），如需强制可在下方断言中打开
+    warn_if_not_sp3: yes
+
+    # 离线包目录（控制机本地路径）
+    docker_offline_bundle_dir: "{{ playbook_dir }}/docker_offline_bundle"
+    # 远端临时目录
+    docker_offline_remote_dir: "/tmp/docker_offline_bundle"
+    # 是否在安装结束后清理远端临时目录
+    docker_offline_clean_remote: false
+
+    # 离线安装参数
+    docker_offline_nogpgcheck: true
+    docker_offline_disable_repos: true
+
+    # 必需 RPM（至少各匹配一个）
+    docker_offline_required_rpm_patterns:
+      - "docker-ce-*.rpm"
+      - "docker-ce-cli-*.rpm"
+      - "containerd.io-*.rpm"
+
+    # 可选 RPM
+    docker_offline_optional_rpm_patterns:
+      - "docker-buildx-plugin-*.rpm"
+      - "docker-compose-plugin-*.rpm"
+
+    # Docker Compose 安装方式：
+    # - auto: 优先本地二进制 -> compose plugin
+    # - local: 强制本地二进制
+    # - plugin: 强制 compose plugin
+    # - skip: 不安装
+    docker_compose_install: "auto"
+
+    # Docker Compose 离线二进制候选（放在 bundle 目录）
+    docker_compose_bin_candidates:
+      - "docker-compose-linux-aarch64"
+      - "docker-compose-linux-arm64"
+      - "docker-compose-aarch64"
+      - "docker-compose"
+
+    # 重要：在部分麒麟/类 RHEL 系统上，Ansible package 可能因 Python 版本不足而失败
+    # 默认使用 raw 规避
+    use_raw_package_ops: yes
+
+    # dnf 安装参数（用于解决依赖冲突）
+    docker_dnf_allowerasing: yes
+    docker_dnf_nobest: yes
+    docker_dnf_skip_broken: no
+
+    # 时间戳（用于提示）
+    timestamp: "{{ ansible_date_time.date }}_{{ ansible_date_time.time | regex_replace(':', '') }}"
+
+  tasks:
+    - name: 显示安装信息
+      debug:
+        msg: "准备离线安装 Docker {{ docker_version }} (Kylin V10 SP3 / aarch64)"
+
+    - name: 读取 /etc/os-release（用于识别麒麟）
+      slurp:
+        src: /etc/os-release
+      register: os_release
+      changed_when: false
+      failed_when: false
+
+    - name: 解析 /etc/os-release（best-effort）
+      set_fact:
+        os_release_text: "{{ os_release.content | default('') | b64decode }}"
+      when: os_release is defined and os_release.content is defined
+
+    - name: 校验当前系统为麒麟（best-effort）
+      assert:
+        that:
+          - allow_non_kylin | bool or ((os_release_text | default('') | lower | regex_search('(?m)^id\\s*=\\s*\"?kylin\"?\\s*$')) is not none)
+        fail_msg: "检测到系统可能不是 Kylin（/etc/os-release 未匹配到 ID=kylin），如确需继续请设置 allow_non_kylin: yes"
+      when: os_release_text is defined
+
+    - name: 提示系统版本信息（best-effort）
+      debug:
+        msg:
+          - "Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Kernel: {{ ansible_kernel }}"
+          - "Arch: {{ ansible_architecture }}"
+          - "OS-Release: {{ os_release_text | default('') | regex_replace('\n', ' ') | truncate(160, True) }}"
+
+    - name: 如果未检测到 SP3 则提醒（不强制）
+      debug:
+        msg: "未在 /etc/os-release 中检测到 SP3 关键词，如系统确为 V10 SP3 可忽略此提示。"
+      when:
+        - warn_if_not_sp3 | bool
+        - (os_release_text | default('') | regex_search('(?i)sp3')) is none
+
+    - name: 选择目标架构
+      set_fact:
+        selected_arch: "{{ (docker_target_arch | trim) if (docker_target_arch | trim) != '' else ansible_architecture }}"
+
+    - name: 校验架构参数（仅支持 aarch64）
+      assert:
+        that:
+          - selected_arch == 'aarch64'
+        fail_msg: "当前仅支持 aarch64，selected_arch={{ selected_arch }}"
+
+    - name: 防止架构与机器不一致
+      assert:
+        that:
+          - allow_arch_mismatch | bool or selected_arch == ansible_architecture
+        fail_msg: "selected_arch={{ selected_arch }} 与 ansible_architecture={{ ansible_architecture }} 不一致；如确需忽略请设置 allow_arch_mismatch: yes"
+
+    - name: 检查是否已安装 Docker
+      command: which docker
+      register: docker_exists
+      changed_when: false
+      failed_when: false
+
+    - name: 停止/禁用 Podman 相关服务（best-effort）
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - podman
+        - podman.socket
+      ignore_errors: yes
+      when: remove_podman | bool
+
+    - name: 卸载 Podman 相关软件包（raw，best-effort）
+      raw: "{{ ansible_facts.pkg_mgr }} -y remove {{ podman_remove_packages | join(' ') }} || true"
+      register: podman_remove_raw
+      changed_when: >
+        ((podman_remove_raw.stdout | default('') ~ podman_remove_raw.stderr | default('')) | regex_search('(?i)(No Packages marked for removal|Nothing to do)')) is none
+      failed_when: false
+      when: remove_podman | bool and (use_raw_package_ops | bool)
+
+    - name: 卸载 Podman 相关软件包（Ansible package，best-effort）
+      package:
+        name: "{{ podman_remove_packages }}"
+        state: absent
+      failed_when: false
+      when: remove_podman | bool and not (use_raw_package_ops | bool)
+
+    - name: 停止 Docker 相关服务（best-effort）
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - docker
+        - containerd
+      ignore_errors: yes
+      when: docker_exists.rc == 0
+
+    - name: 检查默认 Docker 数据目录是否存在
+      stat:
+        path: /var/lib/docker
+      register: docker_data_dir
+      when: clean_docker_data | bool
+
+    - name: 警告即将删除 Docker 数据目录
+      debug:
+        msg: |
+          警告: 即将删除 Docker 数据目录 /var/lib/docker
+          这将删除所有 Docker 镜像、容器和卷数据！
+          如果不希望删除数据，请按 Ctrl+C 终止操作。
+      when: clean_docker_data | bool and docker_data_dir.stat.exists
+
+    - name: 暂停 5 秒以便确认
+      pause:
+        seconds: 5
+      when: clean_docker_data | bool and docker_data_dir.stat.exists
+
+    - name: 删除 Docker 数据目录
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/docker
+        - /var/lib/containerd
+      when: clean_docker_data | bool and docker_data_dir.stat.exists
+
+    - name: 检查控制机离线包目录是否存在
+      stat:
+        path: "{{ docker_offline_bundle_dir }}"
+      delegate_to: localhost
+      become: false
+      register: docker_offline_bundle_dir_stat
+
+    - name: 如离线包目录不存在则终止执行
+      fail:
+        msg: |
+          控制机离线包目录不存在或不可访问：
+          - {{ docker_offline_bundle_dir }}
+      when: not (docker_offline_bundle_dir_stat.stat.exists | bool)
+
+    - name: 收集离线 RPM 列表（控制机本地）
+      set_fact:
+        docker_offline_rpm_files: "{{ lookup('ansible.builtin.fileglob', docker_offline_bundle_dir ~ '/*.rpm', wantlist=True) }}"
+
+    - name: 如离线 RPM 为空则终止执行
+      fail:
+        msg: |
+          离线包目录未找到 RPM 文件，请确认已放置 docker-ce / docker-ce-cli / containerd.io 等 RPM：
+          - {{ docker_offline_bundle_dir }}
+      when: docker_offline_rpm_files | length == 0
+
+    - name: 检查必需 RPM 是否存在（控制机本地）
+      set_fact:
+        docker_offline_missing_required: >-
+          {{
+            (docker_offline_missing_required | default([])) +
+            ([item] if (lookup('ansible.builtin.fileglob', docker_offline_bundle_dir ~ '/' ~ item, wantlist=True) | length == 0) else [])
+          }}
+      loop: "{{ docker_offline_required_rpm_patterns }}"
+
+    - name: 必需 RPM 缺失则终止执行
+      fail:
+        msg: |
+          离线包缺少必需 RPM（至少应各匹配一个）：
+          {% for p in docker_offline_missing_required %}
+          - {{ docker_offline_bundle_dir }}/{{ p }}
+          {% endfor %}
+      when: docker_offline_missing_required is defined and docker_offline_missing_required | length > 0
+
+    - name: 选择 Docker Compose 本地二进制（控制机本地）
+      set_fact:
+        docker_compose_local_bin: "{{ docker_compose_local_bin | default('') }}"
+
+    - name: 按优先级挑选 Docker Compose 本地二进制（控制机本地）
+      set_fact:
+        docker_compose_local_bin: >-
+          {{
+            docker_compose_local_bin
+            if (docker_compose_local_bin | length > 0)
+            else ((lookup('ansible.builtin.fileglob', docker_offline_bundle_dir ~ '/' ~ item, wantlist=True) | first) | default('', true))
+          }}
+      loop: "{{ docker_compose_bin_candidates }}"
+
+    - name: 本地 Docker Compose 文件缺失时直接失败（local 模式）
+      assert:
+        that:
+          - docker_compose_local_bin | length > 0
+        fail_msg: "local 模式要求在 {{ docker_offline_bundle_dir }} 提供 docker-compose 二进制"
+      when: docker_compose_install == 'local'
+
+    - name: 初始化本地 Compose 安装结果
+      set_fact:
+        compose_local_ok: false
+
+    - name: 创建远端离线包目录
+      file:
+        path: "{{ docker_offline_remote_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: 复制 RPM 到远端
+      copy:
+        src: "{{ item }}"
+        dest: "{{ docker_offline_remote_dir }}/{{ item | basename }}"
+        mode: "0644"
+      loop: "{{ docker_offline_rpm_files }}"
+
+    - name: 生成远端 RPM 路径列表
+      set_fact:
+        docker_offline_remote_rpm_files: "{{ docker_offline_rpm_files | map('basename') | map('regex_replace', '^', docker_offline_remote_dir ~ '/') | list }}"
+
+    - name: 安装 Docker RPM（raw）
+      raw: >-
+        {{ ansible_facts.pkg_mgr }} -y
+        {% if ansible_facts.pkg_mgr == 'dnf' and (docker_dnf_allowerasing | bool) %} --allowerasing{% endif %}
+        {% if ansible_facts.pkg_mgr == 'dnf' and (docker_dnf_nobest | bool) %} --nobest{% endif %}
+        {% if ansible_facts.pkg_mgr == 'dnf' and (docker_dnf_skip_broken | bool) %} --skip-broken{% endif %}
+        {% if docker_offline_nogpgcheck | bool %} --nogpgcheck{% endif %}
+        {% if docker_offline_disable_repos | bool %} --disablerepo='*'{% endif %}
+        {% if ansible_facts.pkg_mgr == 'yum' %} localinstall {% else %} install {% endif %}
+        {{ docker_offline_remote_dir }}/*.rpm
+      register: docker_install_raw
+      changed_when: >
+        ((docker_install_raw.stdout | default('') ~ docker_install_raw.stderr | default('')) | regex_search('(?i)Nothing to do')) is none
+      failed_when: docker_install_raw.rc != 0
+      when: use_raw_package_ops | bool
+
+    - name: 安装 Docker RPM（Ansible package）
+      package:
+        name: "{{ docker_offline_remote_rpm_files }}"
+        state: present
+      register: docker_install_pkg
+      when: not (use_raw_package_ops | bool)
+
+    - name: 设置 Docker 存储路径
+      set_fact:
+        actual_docker_path: "{{ docker_storage_path }}"
+      when: docker_storage_path | trim != ""
+
+    - name: 创建 Docker 存储目录
+      file:
+        path: "{{ actual_docker_path }}"
+        state: directory
+        mode: "0711"
+      when: actual_docker_path is defined
+
+    - name: 创建 Docker 配置目录
+      file:
+        path: /etc/docker
+        state: directory
+        mode: "0755"
+
+    - name: 确保 docker 组存在
+      group:
+        name: docker
+        state: present
+
+    - name: 配置 Docker daemon.json
+      template:
+        src: daemon.json.j2
+        dest: /etc/docker/daemon.json
+        mode: "0644"
+      register: docker_config
+      notify: restart docker
+
+    - name: 设置 Docker 开机自启并启动
+      systemd:
+        name: docker
+        enabled: "{{ docker_start_on_boot }}"
+        state: started
+      register: docker_service
+
+    - name: 检查 compose plugin 是否可用（best-effort）
+      command: docker compose version
+      register: compose_plugin_version
+      changed_when: false
+      failed_when: false
+
+    - name: 记录 compose plugin 可用性
+      set_fact:
+        compose_plugin_available: "{{ compose_plugin_version.rc == 0 }}"
+
+    - name: 安装 Docker Compose（二进制：本地复制）
+      copy:
+        src: "{{ docker_compose_local_bin }}"
+        dest: /usr/local/bin/docker-compose
+        mode: "0755"
+      register: compose_copy_local
+      ignore_errors: yes
+      when:
+        - docker_compose_install in ['auto', 'local']
+        - docker_compose_local_bin | length > 0
+
+    - name: 记录本地 Docker Compose 安装结果
+      set_fact:
+        compose_local_ok: "{{ (compose_copy_local is defined) and not (compose_copy_local.skipped | default(false)) and not (compose_copy_local.failed | default(false)) }}"
+
+    - name: 安装 Docker Compose（compose plugin：兼容 docker-compose 入口）
+      copy:
+        dest: /usr/local/bin/docker-compose
+        mode: "0755"
+        content: |
+          #!/usr/bin/env sh
+          exec docker compose "$@"
+      when: compose_plugin_available | bool and (docker_compose_install == 'plugin' or (docker_compose_install == 'auto' and not (compose_local_ok | bool)))
+
+    - name: compose plugin 不可用时直接失败（plugin 模式）
+      assert:
+        that:
+          - compose_plugin_available | bool
+        fail_msg: "plugin 模式需要 docker compose 可用（请确保 docker-compose-plugin RPM 已包含在离线包中）"
+      when: docker_compose_install == 'plugin'
+
+    - name: 处理 Docker 用户组
+      user:
+        name: "{{ item }}"
+        groups: docker
+        append: yes
+      loop: "{{ docker_users }}"
+      when: docker_users | length > 0
+
+    - name: 验证 Docker 安装
+      command: docker --version
+      register: docker_version_output
+      changed_when: false
+
+    - name: 验证 Docker Compose 安装
+      command: /usr/local/bin/docker-compose --version
+      register: compose_version_output
+      changed_when: false
+      failed_when: false
+
+    - name: 显示版本信息
+      debug:
+        msg:
+          - "{{ docker_version_output.stdout }}"
+          - "{{ compose_version_output.stdout if compose_version_output.stdout else 'docker-compose 未检测到（可改用 docker compose version 或调整 docker_compose_install）' }}"
+
+    - name: 强制执行 handlers
+      meta: flush_handlers
+
+    - name: 确保 Docker 开机自启并已启动
+      systemd:
+        name: docker
+        enabled: "{{ docker_start_on_boot }}"
+        state: started
+
+    - name: 清理远端离线包目录（可选）
+      file:
+        path: "{{ docker_offline_remote_dir }}"
+        state: absent
+      when: docker_offline_clean_remote | bool
+
+    - name: 显示 Docker 安装完成信息
+      debug:
+        msg: |
+          ===== Docker 离线安装完成 =====
+
+          Docker: {{ docker_version_output.stdout }}
+          Docker Compose: {{ compose_version_output.stdout if compose_version_output.stdout else '未安装/未检测到' }}
+
+          配置信息:
+          - 存储路径: {{ actual_docker_path | default('/var/lib/docker') }}
+          - 配置文件: /etc/docker/daemon.json
+          - 离线包目录（控制机）: {{ docker_offline_bundle_dir }}
+
+          常用命令:
+          - 查看 Docker 信息: docker info
+          - Compose(v2): docker compose version
+          - Compose(兼容): docker-compose --version
+
+  handlers:
+    - name: restart docker
+      shell: systemctl daemon-reload && systemctl restart docker
+      become: yes
